@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Navi — Capture plan, prototype, and feature map</title>
+<style>
+  :root {
+    --bg: var(--background, #111214); --panel: var(--card, #1b1c1f); --line: var(--border, #2c2d31);
+    --text: var(--foreground, #e8e8ea); --dim: var(--muted-foreground, #9a9ba1);
+    --accent: #3b82f6; --red: #ef4444; --green: #22c55e; --amber: #f59e0b;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+  header { display: flex; align-items: center; gap: 18px; padding: 14px 24px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 50; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 span { color: var(--dim); font-weight: 400; }
+  nav button { background: none; border: 1px solid transparent; color: var(--dim); padding: 6px 12px; border-radius: 7px; cursor: pointer; font: inherit; }
+  nav button.on { color: var(--text); border-color: var(--line); background: var(--panel); }
+  section.tab { display: none; padding: 20px 24px 60px; }
+  section.tab.on { display: block; }
+  .hint { color: var(--dim); margin: 0 0 12px; line-height: 1.5; }
+  .hint b { color: var(--text); }
+  kbd { font: 12px ui-monospace, Menlo, monospace; background: #26272b; border: 1px solid #36373c; border-bottom-width: 2px; padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- Prototype screen ---------- */
+  .proto-wrap { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  @media (max-width: 1000px) { section.tab { padding: 14px 4px 40px; } header { padding: 10px 4px; flex-wrap: wrap; gap: 8px; } .side { width: 100% !important; } th { top: 0; position: static; } }
+  .scaler { width: 1100px; height: 690px; flex: none; transform-origin: 0 0; }
+  #screen { position: relative; width: 1100px; height: 690px; border-radius: 12px; overflow: hidden; user-select: none; box-shadow: 0 0 0 1px #333, 0 20px 60px #0008; }
+  #desktop { position: absolute; inset: 0; background: linear-gradient(135deg, #5b3f8c 0%, #c2557a 45%, #f19a5b 100%); transition: background .4s; }
+  #desktop.clean { background: linear-gradient(160deg, #0f2a44 0%, #1f5f8b 55%, #6fb3d2 100%); }
+  .icons { position: absolute; right: 18px; top: 40px; display: grid; grid-template-columns: repeat(2, 74px); gap: 10px; transition: opacity .3s; }
+  #desktop.clean .icons { opacity: 0; }
+  .icon { text-align: center; font-size: 11px; color: #fff; text-shadow: 0 1px 2px #000; }
+  .icon i { display: block; font-style: normal; font-size: 34px; }
+  .menubar { position: absolute; left: 0; right: 0; top: 0; height: 26px; background: #0007; backdrop-filter: blur(20px); display: flex; align-items: center; padding: 0 12px; gap: 16px; font-size: 13px; color: #fff; z-index: 30; }
+  .menubar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+  #naviIcon { cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  #naviIcon:hover, #naviIcon.open { background: #ffffff30; }
+  #recPill { display: none; background: var(--red); padding: 1px 8px; border-radius: 5px; cursor: pointer; font-variant-numeric: tabular-nums; }
+  #recPill.on { display: inline-block; }
+
+  .win { position: absolute; background: #1e1f22; border-radius: 10px; box-shadow: 0 0 0 1px #0006, 0 18px 40px #0007; overflow: hidden; color: #ddd; }
+  .win .bar { height: 28px; background: #2a2b2f; display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12px; color: #aaa; }
+  .win .bar s { width: 11px; height: 11px; border-radius: 50%; display: inline-block; text-decoration: none; }
+  .win .bar s:nth-child(1) { background: #ff5f57; } .win .bar s:nth-child(2) { background: #febc2e; } .win .bar s:nth-child(3) { background: #28c840; }
+  .win .bar em { font-style: normal; margin-left: 8px; }
+  .win .content { padding: 12px 14px; font-size: 12.5px; line-height: 1.55; }
+  .win.term .content { font: 12px ui-monospace, Menlo, monospace; color: #b5f5b5; background: #0d0f0d; height: calc(100% - 28px); }
+  .win.notes { background: #fbf7e9; color: #333; } .win.notes .bar { background: #ece6cf; color: #777; }
+  .win.slack .content { height: calc(100% - 28px); display: flex; flex-direction: column; }
+  .msgs { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; }
+  .msg { font-size: 12px; } .msg b { color: #fff; }
+  .msg .att { margin-top: 4px; border-radius: 6px; overflow: hidden; display: inline-block; border: 1px solid #333; }
+  .dropzone { margin-top: 8px; border: 1.5px dashed #555; border-radius: 8px; padding: 10px; text-align: center; color: #888; font-size: 12px; transition: all .15s; }
+  .dropzone.over { border-color: var(--accent); color: #fff; background: #3b82f622; }
+  .win.hl { box-shadow: 0 0 0 3px var(--accent), 0 18px 40px #0007; }
+
+  .menu { position: absolute; top: 28px; right: 70px; width: 270px; background: #2a2b2fee; backdrop-filter: blur(30px); border-radius: 9px; padding: 5px; z-index: 40; box-shadow: 0 0 0 1px #0008, 0 12px 30px #0008; display: none; font-size: 13px; }
+  .menu.on { display: block; }
+  .menu div.item { display: flex; justify-content: space-between; padding: 4px 10px; border-radius: 5px; cursor: pointer; color: #eee; }
+  .menu div.item:hover { background: var(--accent); color: #fff; }
+  .menu div.item span { color: #999; font-size: 12px; } .menu div.item:hover span { color: #fff; }
+  .menu hr { border: 0; border-top: 1px solid #ffffff1a; margin: 4px 6px; }
+  .menu .item.check::before { content: "✓ "; }
+
+  /* selection overlay */
+  #overlay { position: absolute; inset: 0; z-index: 60; display: none; cursor: crosshair; }
+  #overlay.on { display: block; }
+  #overlay .dim { position: absolute; inset: 0; background: #0006; }
+  #overlay .xh, #overlay .yh { position: absolute; background: #fff9; pointer-events: none; }
+  #overlay .xh { height: 1px; left: 0; right: 0; } #overlay .yh { width: 1px; top: 0; bottom: 0; }
+  #sel { position: absolute; border: 1px solid #fff; box-shadow: 0 0 0 9999px #0006; display: none; pointer-events: none; }
+  #overlay.selecting .dim { display: none; }
+  #selSize { position: absolute; background: #000c; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; pointer-events: none; display: none; font-variant-numeric: tabular-nums; }
+  #mag { position: absolute; width: 110px; height: 110px; border-radius: 50%; border: 2px solid #fff; overflow: hidden; pointer-events: none; box-shadow: 0 4px 14px #0008; background: #000; }
+  #mag .zoom { position: absolute; transform-origin: 0 0; }
+  #mag .grid { position: absolute; inset: 0; background-image: linear-gradient(#0003 1px, transparent 1px), linear-gradient(90deg, #0003 1px, transparent 1px); background-size: 8px 8px; }
+  #mag .px { position: absolute; left: 51px; top: 51px; width: 8px; height: 8px; border: 1px solid #fff; box-shadow: 0 0 0 1px #000; }
+  #mag .coord { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #fff; text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; }
+  #overlay .modeTag { position: absolute; top: 36px; left: 50%; transform: translateX(-50%); background: #000c; color: #fff; padding: 5px 12px; border-radius: 14px; font-size: 12px; pointer-events: none; }
+  #overlay.windowMode { cursor: default; }
+  #overlay.windowMode .dim, #overlay.windowMode .xh, #overlay.windowMode .yh, #overlay.windowMode #mag { display: none; }
+  #winHl { position: absolute; background: #3b82f644; border: 2px solid var(--accent); border-radius: 10px; pointer-events: none; display: none; }
+
+  /* capture cards */
+  #cards { position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column-reverse; gap: 10px; z-index: 50; }
+  .card { width: 210px; height: 132px; border-radius: 10px; background: #222; position: relative; overflow: hidden; box-shadow: 0 0 0 1px #ffffff22, 0 10px 30px #000a; animation: slideIn .35s cubic-bezier(.2,.9,.3,1.2); cursor: grab; }
+  @keyframes slideIn { from { transform: translateX(-240px); } to { transform: none; } }
+  .card .thumb { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #2a2a2e; }
+  .card .hover { position: absolute; inset: 0; background: #ffffff26; backdrop-filter: blur(10px) saturate(.8); opacity: 0; transition: opacity .15s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+  .card:hover .hover { opacity: 1; }
+  .card .big { background: #ffffffe6; color: #111; border: 0; border-radius: 999px; padding: 6px 0; width: 84px; font: 600 13px inherit; font-family: inherit; cursor: pointer; }
+  .card .big:hover { background: #fff; }
+  .card .corner { position: absolute; width: 26px; height: 26px; border-radius: 50%; background: #ffffffcc; color: #111; border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; }
+  .card .tl { top: 6px; left: 6px; } .card .tr { top: 6px; right: 6px; } .card .bl { bottom: 6px; left: 6px; } .card .br { bottom: 6px; right: 6px; }
+  .card .badge { position: absolute; left: 6px; bottom: 6px; background: #000b; color: #fff; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; z-index: 2; pointer-events: none; }
+  .card:hover .badge { display: none; }
+  .card .fmt { display: flex; gap: 4px; }
+  .card .fmt button { background: #ffffff33; color: #fff; border: 0; border-radius: 4px; font-size: 11px; padding: 2px 7px; cursor: pointer; }
+  .card .fmt button.on { background: #fff; color: #111; }
+
+  .pinned { position: absolute; z-index: 45; border-radius: 6px; box-shadow: 0 0 0 1px #fff4, 0 14px 30px #000a; cursor: move; overflow: hidden; background: #222; }
+  .pinned .pctl { position: absolute; top: 4px; right: 4px; display: none; gap: 4px; align-items: center; background: #000b; padding: 3px 6px; border-radius: 6px; font-size: 11px; color: #fff; z-index: 3; }
+  .pinned:hover .pctl { display: flex; }
+  .pinned .pctl button { background: none; border: 0; color: #fff; cursor: pointer; }
+  .pinned .pctl input { width: 60px; }
+
+  .toast { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: #000d; color: #fff; padding: 8px 14px; border-radius: 9px; font-size: 12.5px; z-index: 80; max-width: 640px; box-shadow: 0 6px 20px #0008; animation: fadeUp .25s; }
+  @keyframes fadeUp { from { opacity: 0; transform: translate(-50%, 8px); } }
+  .notif { position: absolute; right: 12px; top: 36px; width: 300px; background: #2b2c30f2; border-radius: 12px; padding: 10px 12px; font-size: 12px; z-index: 35; box-shadow: 0 10px 30px #0008; animation: notifIn .35s; }
+  @keyframes notifIn { from { transform: translateX(330px); } }
+  .notif b { display: block; } .notif .tag { display: inline-block; margin-top: 6px; background: var(--green); color: #031; font-weight: 600; padding: 1px 7px; border-radius: 4px; font-size: 11px; }
+
+  /* recording */
+  #recFrame { position: absolute; border: 2px dashed var(--red); z-index: 55; display: none; pointer-events: none; }
+  #recHud { position: absolute; z-index: 70; display: none; flex-direction: column; width: 300px; background: #26272bf5; border-radius: 14px; box-shadow: 0 0 0 1px #ffffff14, 0 14px 34px #000b; font-size: 13px; color: #eee; overflow: visible; }
+  #recHud .top { display: flex; border-bottom: 1px solid #ffffff1a; height: 44px; }
+  #recHud .top > * { display: flex; align-items: center; justify-content: center; border-right: 1px solid #ffffff1a; }
+  #recHud .top > *:last-child { border-right: 0; }
+  #recHud .ico { width: 52px; background: none; border: 0; border-right: 1px solid #ffffff1a; color: #888; font-size: 17px; cursor: pointer; }
+  #recHud .ico.on { color: #fff; }
+  #recHud .ico:hover { color: #fff; }
+  #recHud .ico svg { display: block; }
+  #recHud .ico .mic-on { display: none; } #recHud .ico.on .mic-on { display: inline; } #recHud .ico.on .mic-off { display: none; }
+  #recHud .ico[data-opt="mic"] { color: #77787d; }
+  #recHud .ico[data-opt="mic"].on { color: #fff; }
+  #recHud .size { flex: 1; gap: 6px; color: #888; }
+  #recHud .size input { width: 52px; background: #1a1b1e; border: 0; border-radius: 5px; color: #fff; text-align: center; font: 600 14px inherit; font-family: inherit; padding: 4px 0; }
+  #recHud .row { display: flex; justify-content: space-between; align-items: center; padding: 0 16px; height: 44px; cursor: pointer; font-size: 15px; font-weight: 500; }
+  #recHud .row + .row { border-top: 1px solid #ffffff1a; }
+  #recHud .row:hover { background: #ffffff10; }
+  #recHud .row:last-child { border-radius: 0 0 14px 14px; }
+  #recHud .row .tag { background: #fff; color: #111; font-weight: 800; font-size: 11px; border-radius: 5px; padding: 2px 5px; }
+  #recOpts { position: absolute; top: 48px; left: 40px; width: 230px; background: #2e2f33fa; border-radius: 10px; padding: 6px; box-shadow: 0 12px 30px #000b; display: none; z-index: 2; }
+  #recOpts.on { display: block; }
+  #recOpts label { display: flex; justify-content: space-between; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+  #recOpts label:hover { background: #ffffff10; }
+  #countdown { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 120px; font-weight: 700; color: #fff; text-shadow: 0 4px 30px #000; z-index: 90; pointer-events: none; }
+  .ripple { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 3px solid #facc15; animation: rip .5s forwards; pointer-events: none; z-index: 85; }
+  @keyframes rip { to { transform: scale(2); opacity: 0; } }
+  #keys { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); background: #000c; color: #fff; padding: 6px 14px; border-radius: 10px; font-size: 18px; z-index: 85; display: none; }
+  #cam { position: absolute; width: 96px; height: 96px; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #f5d0a9 0 22%, #6b4f3a 23% 30%, #3b82f6 31%); border: 3px solid #fff; z-index: 56; display: none; box-shadow: 0 6px 20px #0008; }
+  #scrollStrip { position: absolute; right: 16px; top: 40px; width: 160px; max-height: 600px; background: #000c; border-radius: 8px; padding: 6px; z-index: 75; display: none; overflow: hidden; }
+  #scrollStrip .lbl { color: #fff; font-size: 11px; margin-bottom: 4px; }
+
+  /* modals (editor, trim, history) */
+  .modal { position: fixed; inset: 0; background: #000b; z-index: 200; display: none; align-items: center; justify-content: center; }
+  .modal.on { display: flex; }
+  .sheet { background: #1c1d20; border-radius: 12px; box-shadow: 0 0 0 1px #333, 0 30px 80px #000; overflow: hidden; }
+  .toolbar { display: flex; gap: 2px; padding: 8px; border-bottom: 1px solid #2c2d31; align-items: center; flex-wrap: wrap; }
+  .toolbar button { background: none; border: 0; color: #ccc; width: 34px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 15px; }
+  .toolbar button:hover { background: #2c2d31; }
+  .toolbar button.on { background: var(--accent); color: #fff; }
+  .toolbar .sep { width: 1px; height: 20px; background: #333; margin: 0 6px; }
+  .toolbar .txt { width: auto; padding: 0 10px; font-size: 12.5px; }
+  .toolbar .done { background: var(--accent); color: #fff; width: auto; padding: 0 14px; margin-left: auto; font-weight: 600; font-size: 13px; }
+  .toolbar input[type=color] { width: 30px; height: 26px; border: 0; background: none; padding: 0; cursor: pointer; }
+  #edArea { padding: 22px; display: flex; justify-content: center; align-items: center; background: #141517; min-width: min(820px, calc(100vw - 30px)); min-height: 300px; }
+  #trimSheet { max-width: calc(100vw - 30px); }
+  #edFrame { transition: padding .25s, background .25s; border-radius: 12px; }
+  #edFrame.bg { padding: 36px; background: linear-gradient(135deg, #a78bfa, #f472b6 50%, #fb923c); }
+  #edStage { position: relative; overflow: hidden; border-radius: 6px; box-shadow: 0 10px 30px #0008; cursor: crosshair; }
+  #edStage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .blurbox { position: absolute; backdrop-filter: blur(7px); pointer-events: none; }
+  .pixbox { position: absolute; backdrop-filter: blur(4px) contrast(1.2); background-image: linear-gradient(#0002 1px, transparent 1px), linear-gradient(90deg, #0002 1px, transparent 1px); background-size: 9px 9px; pointer-events: none; }
+  .spot { position: absolute; box-shadow: 0 0 0 9999px #000a; border-radius: 6px; pointer-events: none; }
+  .tbox { position: absolute; color: #fff; font-weight: 700; font-size: 18px; text-shadow: 0 1px 3px #000; outline: none; min-width: 20px; cursor: text; }
+  .edTip { color: var(--dim); font-size: 12px; padding: 8px 12px; border-top: 1px solid #2c2d31; }
+
+  #trimSheet { width: 760px; padding: 18px; }
+  #trimSheet h3 { margin: 0 0 12px; font-size: 15px; }
+  .film { position: relative; display: flex; height: 70px; border-radius: 8px; overflow: hidden; background: #000; }
+  .film > div:not(.trimSel) { flex: 1; overflow: hidden; border-right: 1px solid #000; position: relative; }
+  .trimSel { position: absolute; top: 0; bottom: 0; border: 3px solid var(--amber); border-left-width: 10px; border-right-width: 10px; border-radius: 6px; box-shadow: 0 0 0 9999px #000a; cursor: ew-resize; }
+  .trimRow { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .btn { background: #2c2d31; color: #eee; border: 0; border-radius: 7px; padding: 7px 14px; cursor: pointer; font: inherit; }
+  .btn.pri { background: var(--accent); color: #fff; font-weight: 600; }
+
+  #histSheet { width: 450px; background: #2a2b2fee; padding: 0 0 6px; }
+  #histSheet .hhead { display: flex; gap: 10px; align-items: center; padding: 10px 14px; color: #999; }
+  #histSheet .hhead div { flex: 1; background: #ffffff12; border-radius: 6px; padding: 4px 8px; color: #888; }
+  .hrow { display: flex; align-items: center; gap: 8px; padding: 0 10px; margin: 0 5px; height: 26px; border-radius: 5px; font-size: 13px; }
+  .hrow.sel { background: var(--accent); color: #fff; }
+  .hrow .k { margin-left: auto; color: #999; font-size: 12px; } .hrow.sel .k { color: #fff; }
+  .hrow.img { height: 50px; } .hrow .mini { height: 40px; width: 70px; border-radius: 3px; overflow: hidden; position: relative; background: #333; }
+  .hrow .tag { font-size: 10px; background: #ffffff22; padding: 0 5px; border-radius: 3px; }
+
+  .side { width: 300px; flex: none; font-size: 13px; line-height: 1.5; }
+  .side h3 { margin: 0 0 8px; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+  .side ol { margin: 0 0 16px; padding-left: 18px; } .side li { margin-bottom: 6px; }
+  .side .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+
+  /* ---------- Map + plan ---------- */
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; position: sticky; top: 57px; background: var(--bg); }
+  td.t a { color: var(--accent); text-decoration: none; font-variant-numeric: tabular-nums; }
+  td code, .plan code { font: 12px ui-monospace, Menlo, monospace; color: #c4b5fd; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .s0 { background: #22c55e22; color: #4ade80; } .s1 { background: #3b82f622; color: #60a5fa; } .s2 { background: #a855f722; color: #c084fc; }
+  .s3 { background: #f59e0b22; color: #fbbf24; } .s4 { background: #ec489922; color: #f472b6; } .s5 { background: #ef444422; color: #f87171; } .sx { background: #6b728033; color: #9ca3af; }
+  tr.group td { color: var(--dim); font-weight: 600; padding-top: 18px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .plan { max-width: 980px; line-height: 1.6; }
+  .plan h2 { font-size: 18px; margin: 28px 0 6px; } .plan h2:first-child { margin-top: 0; }
+  .plan .stepcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .plan .stepcard h3 { margin: 0 0 6px; font-size: 15px; display: flex; gap: 10px; align-items: center; }
+  .plan ul { margin: 6px 0; padding-left: 20px; }
+  .plan .done { color: var(--dim); font-size: 13px; }
+  .legend { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Navi <span>· Capture plan</span></h1>
+  <nav>
+    <button data-tab="proto" class="on">1. Prototype</button>
+    <button data-tab="map">2. Feature map</button>
+    <button data-tab="plan">3. Plan</button>
+  </nav>
+</header>
+
+<!-- ======================= PROTOTYPE ======================= -->
+<section class="tab on" id="tab-proto">
+  <p class="hint">A clickable mock of a Mac screen. Click the <b>✨ Navi</b> icon in the menu bar to start. This mock shows the flow and the look. It is not real capture.</p>
+  <div class="proto-wrap">
+    <div class="scaler" id="scaler">
+      <div id="screen">
+        <div id="desktop">
+          <div class="icons">
+            <div class="icon"><i>📁</i>Old stuff</div><div class="icon"><i>🖼️</i>IMG_2231.png</div>
+            <div class="icon"><i>📄</i>taxes-final-v3.pdf</div><div class="icon"><i>📁</i>untitled folder</div>
+            <div class="icon"><i>📦</i>Xcode.dmg</div><div class="icon"><i>📝</i>notes (2).txt</div>
+            <div class="icon"><i>🖼️</i>Screenshot 14.png</div><div class="icon"><i>📁</i>misc</div>
+          </div>
+          <div class="win notes" data-name="Notes" style="left:60px; top:60px; width:330px; height:250px;">
+            <div class="bar"><s></s><s></s><s></s><em>Notes</em></div>
+            <div class="content">
+              <p><b>Navi launch list</b></p>
+              <ul><li>Capture area, window, fullscreen</li><li>Corner card with copy and drag</li><li>Annotate: arrow, box, blur, counter</li><li>Record MP4 and GIF</li></ul>
+              <p>Ship before Thanksgiving.</p>
+            </div>
+          </div>
+          <div class="win term" data-name="Terminal" style="left:420px; top:100px; width:400px; height:300px;">
+            <div class="bar"><s></s><s></s><s></s><em>Terminal — zsh</em></div>
+            <div class="content">
+              <p>$ swift test</p><p>✔ Test newestTextComesFirst() passed</p><p>✔ Test duplicateTextMovesToTop() passed</p>
+              <p>✔ Test pinnedItemsStayOnTop() passed</p><p>✔ Test historySurvivesRestart() passed</p><p>✔ Test searchIgnoresCase() passed</p>
+              <p>✔ Test run with 10 tests passed</p><p>$ xcodebuild -scheme Navi build</p><p>** BUILD SUCCEEDED **</p><p>$ open Navi.app</p>
+            </div>
+          </div>
+          <div class="win slack" data-name="Slack" style="left:150px; top:340px; width:420px; height:250px;">
+            <div class="bar"><s></s><s></s><s></s><em>Slack — #navi</em></div>
+            <div class="content">
+              <div class="msgs" id="msgs">
+                <div class="msg"><b>Sam</b> how's the capture app going?</div>
+              </div>
+              <div class="dropzone" id="dropzone">Drag a capture card here to send it</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="menubar">
+          <b></b><b>Finder</b><span>File</span><span>Edit</span><span>View</span>
+          <div class="right">
+            <span id="recPill" title="Stop recording">● <span id="recTime">0:00</span> ■</span>
+            <span id="naviIcon">✨</span><span>🔋</span><span>Fri 4:10 PM</span>
+          </div>
+        </div>
+
+        <div class="menu" id="menu">
+          <div class="item" data-act="area">Capture Area <span>⇧⌘4</span></div>
+          <div class="item" data-act="window">Capture Window <span>⇧⌘4 then Space</span></div>
+          <div class="item" data-act="full">Capture Fullscreen <span>⇧⌘3</span></div>
+          <div class="item" data-act="timer">Self-Timer (3 s) <span></span></div>
+          <div class="item" data-act="scroll">Scrolling Capture <span>⌥⇧⌘4</span></div>
+          <div class="item" data-act="ocr">Capture Text (OCR) <span>⌥⇧⌘T</span></div>
+          <hr>
+          <div class="item" data-act="rec">Record Screen <span>⇧⌘5</span></div>
+          <hr>
+          <div class="item" data-act="hist">Open History <span>⇧⌘V</span></div>
+          <div class="item" data-act="icons" id="iconsItem">Hide Desktop Icons <span></span></div>
+          <div class="item" data-act="restore">Restore Closed Card <span>⇧⌘Z</span></div>
+        </div>
+
+        <div id="cards"></div>
+        <div id="recFrame"></div>
+        <div id="cam"></div>
+        <div id="keys"></div>
+        <div id="scrollStrip"><div class="lbl">Stitching… scroll down</div><div id="stripBody"></div></div>
+        <div id="recHud">
+          <div class="top">
+            <button class="ico" data-opt="mic" title="Microphone (off)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="7" height="11" rx="3.5"/><path d="M4 11a6.5 6.5 0 0 0 13 0M10.5 17.5V21"/><path class="mic-on" d="M15.5 19l2 2 4-4.5"/><path class="mic-off" d="M3 3l18 18"/></svg></button>
+            <button class="ico on" id="recSettings" title="Recording options"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 3v18M12 3v18M19 3v18"/><circle cx="5" cy="9" r="2.3" fill="#26272b"/><circle cx="12" cy="15" r="2.3" fill="#26272b"/><circle cx="19" cy="7" r="2.3" fill="#26272b"/></svg></button>
+            <div class="size"><input id="recW"> × <input id="recH"></div>
+            <button class="ico on" id="recFull" title="Record fullscreen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg></button>
+          </div>
+          <div class="row" data-rec="GIF">Record GIF <span class="tag">GIF</span></div>
+          <div class="row" data-rec="MP4">Record Video <svg width="26" height="20" viewBox="0 0 26 20" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"><rect x="1.5" y="3" width="16" height="14" rx="3"/><path d="M17.5 8.5l6-3.5v10l-6-3.5z"/><path d="M5 13.5h6" stroke-linecap="round"/></svg></div>
+          <div id="recOpts">
+            <label>Computer audio <input type="checkbox" data-opt="audio"></label>
+            <label>Camera <input type="checkbox" data-opt="cam"></label>
+            <label>Show clicks <input type="checkbox" data-opt="clicks" checked></label>
+            <label>Show keystrokes <input type="checkbox" data-opt="keys"></label>
+            <label>Hide desktop icons <input type="checkbox" data-opt="icons"></label>
+            <label>Leave out notifications <input type="checkbox" checked disabled></label>
+          </div>
+        </div>
+
+        <div id="overlay">
+          <div class="dim"></div>
+          <div class="xh"></div><div class="yh"></div>
+          <div id="sel"></div><div id="selSize"></div>
+          <div id="winHl"></div>
+          <div id="mag"><div class="zoom"></div><div class="grid"></div><div class="px"></div><div class="coord"></div></div>
+          <div class="modeTag" id="modeTag"></div>
+        </div>
+        <div id="countdown"></div>
+      </div>
+    </div>
+
+    <div class="side" id="side">
+      <div class="box">
+        <h3>Try these</h3>
+        <ol>
+          <li><b>Capture Area.</b> Drag a box. Watch the magnifier and pixel size.</li>
+          <li>Hover the corner card. Try <b>Copy</b>, <b>Save</b>, ✎ <b>Annotate</b>, 📌 <b>Pin</b>.</li>
+          <li><b>Drag</b> the card into the Slack window.</li>
+          <li><b>Capture Window.</b> Hover a window and click it. It comes out alone, on a clean background, with nothing behind it.</li>
+          <li><b>Hide Desktop Icons</b>, then capture again.</li>
+          <li><b>Record Screen.</b> Pick an area. In the bar: mic, 🎚 options (camera, keys, audio), exact size, fullscreen. Then pick <b>Record GIF</b> or <b>Record Video</b>. A notification pops up but is <b>left out of the video</b>. Stop it from the red pill in the menu bar.</li>
+          <li>On a video card, switch <b>MP4 / GIF</b> and open <b>Trim</b>.</li>
+          <li><b>Scrolling Capture</b> and <b>Capture Text</b>.</li>
+          <li><b>Open History</b>: every capture is in the same list as your clipboard.</li>
+        </ol>
+      </div>
+      <div class="box">
+        <h3>In the real app</h3>
+        Esc cancels any capture. Space switches between area and window mode. Cards close on their own after a set time, and Restore brings one back.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Editor -->
+<div class="modal" id="editor">
+  <div class="sheet">
+    <div class="toolbar" id="tools">
+      <button data-tool="arrow" class="on" title="Arrow">↗</button>
+      <button data-tool="rect" title="Rectangle">▭</button>
+      <button data-tool="fill" title="Filled rectangle">■</button>
+      <button data-tool="ellipse" title="Ellipse">◯</button>
+      <button data-tool="line" title="Line">╱</button>
+      <button data-tool="pencil" title="Pencil">✎</button>
+      <button data-tool="hi" title="Highlighter">🖍</button>
+      <button data-tool="text" title="Text">T</button>
+      <button data-tool="counter" title="Counter">①</button>
+      <span class="sep"></span>
+      <button data-tool="blur" title="Blur">💧</button>
+      <button data-tool="pix" title="Pixelate">▦</button>
+      <button data-tool="spot" title="Spotlight">🔦</button>
+      <button data-tool="crop" title="Crop">⌗</button>
+      <span class="sep"></span>
+      <input type="color" id="color" value="#ef4444" title="Color">
+      <button class="txt" id="bgBtn" title="Background tool">Background</button>
+      <button class="txt" id="undoBtn">Undo</button>
+      <button class="done" id="edDone">Done</button>
+    </div>
+    <div id="edArea"><div id="edFrame"><div id="edStage"></div></div></div>
+    <div class="edTip">Also in the real editor: rotate and flip, resize, combine images, OCR, and a "drag me" button that drags the result out.</div>
+  </div>
+</div>
+
+<!-- Trim -->
+<div class="modal" id="trim">
+  <div class="sheet" id="trimSheet">
+    <h3>Trim recording</h3>
+    <div class="film" id="film"></div>
+    <div class="trimRow"><span id="trimLbl">0:00.0 – 0:10.0</span>
+      <span><button class="btn" id="trimCancel">Cancel</button> <button class="btn pri" id="trimSave">Save</button></span></div>
+  </div>
+</div>
+
+<!-- History -->
+<div class="modal" id="hist">
+  <div class="sheet" id="histSheet">
+    <div class="hhead">Navi <div>🔍 type to search...</div></div>
+    <div id="histRows"></div>
+  </div>
+</div>
+
+<!-- ======================= FEATURE MAP ======================= -->
+<section class="tab" id="tab-map">
+  <p class="hint">Every feature in the <a href="https://www.youtube.com/watch?v=FZbICrBKWIU" style="color:var(--accent)">CleanShot X launch video</a>, plus the rest of <a href="https://cleanshot.com/features" style="color:var(--accent)">cleanshot.com/features</a>. Each row says what Navi builds, the macOS part that makes it work, and which step it lands in.</p>
+  <div class="legend">
+    <span class="pill s0">Done</span><span class="pill s1">Step 1 · Capture</span><span class="pill s2">Step 2 · Annotate</span>
+    <span class="pill s3">Step 3 · Extras</span><span class="pill s4">Step 4 · Scroll + background</span><span class="pill s5">Step 5 · Record</span><span class="pill sx">Skip</span>
+  </div>
+  <table>
+    <thead><tr><th>Video</th><th>CleanShot feature</th><th>What Navi builds</th><th>How (macOS)</th><th>Step</th></tr></thead>
+    <tbody id="mapBody"></tbody>
+  </table>
+</section>
+
+<!-- ======================= PLAN ======================= -->
+<section class="tab" id="tab-plan">
+  <div class="plan">
+    <h2>The idea</h2>
+    <p>Navi copies CleanShot X feature for feature, minus the cloud. Every capture (screenshot, scrolling shot, recording, GIF, OCR text) goes to the same place: a <b>corner card</b> first, then the <b>shared history</b> that clipboard items already use. A new Swift package, <code>NaviCapture</code>, holds all of this. It talks to the rest of the app only through <code>NaviCore</code>'s Inbox.</p>
+
+    <h2>Steps</h2>
+    <div class="stepcard"><h3><span class="pill s0">Done</span> Clipboard history</h3>
+      Maccy-style picker at <kbd>⇧⌘V</kbd>, pins, preview card, paste. Shared Inbox with copy counts.</div>
+
+    <div class="stepcard"><h3><span class="pill s1">Step 1</span> Capture core and the corner card</h3>
+      <ul>
+        <li>Capture area, window, and fullscreen with ScreenCaptureKit (<code>SCScreenshotManager</code>).</li>
+        <li>Freeze the screen first, then select on the frozen image. Crosshair, magnifier, pixel size. <kbd>Space</kbd> switches to window mode. Snap to window edges.</li>
+        <li><b>Window capture with nothing behind it:</b> <code>SCContentFilter(desktopIndependentWindow:)</code> captures one window alone, with its shadow and a clear background.</li>
+        <li><b>Corner card (CleanShot layout):</b> on hover, the card blurs and shows round <b>Copy</b> and <b>Save</b> buttons in the middle. Corners: Pin (top left), Close (top right), Annotate or Trim (bottom left), and Show in Finder (bottom right, where CleanShot has Cloud). Drag it into any app (a file drag with the PNG). Auto-close timer. Restore the last closed card. Works on every display.</li>
+        <li><b>Hide desktop icons:</b> leave Finder's desktop icon windows out of the capture filter, and draw a clean wallpaper behind them. The real desktop stays as it is.</li>
+        <li>Every capture goes into the Inbox and shows up in <kbd>⇧⌘V</kbd> with a thumbnail.</li>
+      </ul>
+      <p class="done"><b>Done when:</b> you can capture any of the 3 ways, then copy, save, or drag the card into Slack. Window shots have no desktop behind them, and hidden icons never show.</p></div>
+
+    <div class="stepcard"><h3><span class="pill s2">Step 2</span> Annotate editor</h3>
+      <ul>
+        <li>Arrow, rectangle, filled rectangle, ellipse, line, pencil, highlighter, text, counter, blur, pixelate, spotlight, crop, color picker.</li>
+        <li>Rotate and flip, resize, combine images, undo, and a "drag me" button. Edits stay editable (Navi file format), and export makes a flat PNG.</li>
+      </ul>
+      <p class="done"><b>Done when:</b> you can mark up a capture with every tool, and Done updates the card and the history item.</p></div>
+
+    <div class="stepcard"><h3><span class="pill s3">Step 3</span> Extras</h3>
+      <ul>
+        <li><b>Pin:</b> a floating, always-on-top window. You can change its size and opacity, and lock it so clicks go through it.</li>
+        <li><b>OCR and QR:</b> the Vision framework (<code>VNRecognizeTextRequest</code>, <code>VNDetectBarcodesRequest</code>). On-device, with the text copied.</li>
+        <li><b>Self-timer</b>, <b>All-in-one mode</b> (one hotkey, then pick the mode), and <b>quick actions</b> on the card.</li>
+      </ul></div>
+
+    <div class="stepcard"><h3><span class="pill s4">Step 4</span> Scrolling capture and background tool</h3>
+      <ul>
+        <li><b>Scrolling capture:</b> grab frames while you scroll, line them up with Vision (<code>VNTranslationalImageRegistrationRequest</code>), and stitch them into one tall image. Vertical and horizontal.</li>
+        <li><b>Background tool:</b> gradients and your own images, padding, shadow, aspect ratio, auto balance, and saved presets.</li>
+      </ul></div>
+
+    <div class="stepcard"><h3><span class="pill s5">Step 5</span> Screen recording (after talk to type)</h3>
+      <ul>
+        <li>Record an area, a window, or the full screen with <code>SCStream</code>, and write MP4 (H.264) with <code>AVAssetWriter</code>. Make GIFs with ImageIO first, and maybe <code>gifski</code> (Rust) later.</li>
+        <li>Mic, computer audio (ScreenCaptureKit), camera bubble (<code>AVCaptureSession</code>), and click and keystroke overlays (listen-only <code>CGEventTap</code>).</li>
+        <li><b>Mute notifications:</b> leave Notification Center's windows out of the capture filter. A notification can still show on screen, but it never gets into the video. If you want, Navi can also turn on a Focus through a Shortcut you install once.</li>
+        <li><b>Record bar</b> (shows after you pick an area): mic on or off, an options menu (computer audio, camera, clicks, keystrokes, hide icons), the exact width × height you can type in, a fullscreen button, then <b>Record GIF</b> or <b>Record Video</b>.</li>
+        <li>Stop from the red pill in the menu bar. Trim inside the app (<code>AVPlayerView</code> trimming, then export).</li>
+        <li>After that: the Screen Studio-style editor (smart zoom, cursor smoothing, motion blur, backgrounds).</li>
+      </ul></div>
+
+    <h2>Permissions</h2>
+    <ul>
+      <li><b>Screen Recording:</b> needed for all capture (step 1).</li>
+      <li><b>Accessibility:</b> already granted. It's used for paste.</li>
+      <li><b>Microphone and Camera:</b> asked the first time you use them (step 5).</li>
+      <li><b>Input Monitoring:</b> only for the keystroke overlay (step 5).</li>
+    </ul>
+
+    <h2>Open questions</h2>
+    <ul>
+      <li><b>Hotkeys:</b> should Navi take over <kbd>⇧⌘3</kbd>, <kbd>⇧⌘4</kbd>, and <kbd>⇧⌘5</kbd> from macOS, like CleanShot does? You turn off the system shortcuts in System Settings first.</li>
+      <li><b>Save folder:</b> Desktop, or <code>~/Pictures/Navi</code>?</li>
+      <li><b>Card auto-close:</b> after how many seconds? Or never?</li>
+    </ul>
+  </div>
+</section>
+
+<script>
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + b.dataset.tab));
+});
+
+/* ---------------- feature map ---------------- */
+const V = 'https://www.youtube.com/watch?v=FZbICrBKWIU&t=';
+const S = { done: ['s0', 'Done'], 1: ['s1', 'Step 1'], 2: ['s2', 'Step 2'], 3: ['s3', 'Step 3'], 4: ['s4', 'Step 4'], 5: ['s5', 'Step 5'], x: ['sx', 'Skip'] };
+const MAP = [
+  ['From the launch video'],
+  [17, 'Quick Access Overlay (corner card)', 'Card slides in bottom-left after every capture. Copy, Save, Annotate, Pin, Close.', 'Borderless <code>NSPanel</code>, non-activating, on every Space', 1],
+  [25, 'Annotate tool', 'Full editor with every CleanShot tool', 'SwiftUI canvas + Core Image (blur, pixelate)', 2],
+  [41, 'Drag & drop to share', 'Drag the card into any app: Slack, Mail, Finder, a browser', '<code>NSDraggingSource</code> with a file URL + image on the pasteboard', 1],
+  [46, 'CleanShot Cloud', 'Not built. Local only.', '—', 'x'],
+  [62, 'Scrolling capture', 'Grab while you scroll, then stitch into one tall image', 'Repeated <code>SCScreenshotManager</code> + Vision image registration', 4],
+  [68, 'Screen recorder (video)', 'Record area, window, or fullscreen to MP4', '<code>SCStream</code> + <code>AVAssetWriter</code> (H.264)', 5],
+  [71, 'Save as GIF', 'MP4 / GIF switch on the card', 'ImageIO <code>CGImageDestination</code>; maybe gifski (Rust) later', 5],
+  [76, 'Mute notifications while recording', 'Notifications never get into the video', 'Leave Notification Center windows out of the <code>SCContentFilter</code>; optional Focus via Shortcuts', 5],
+  [87, 'Trim video in the app', 'Trim view with start and end handles', '<code>AVPlayerView</code> trimming + <code>AVAssetExportSession</code>', 5],
+  [96, 'Hide desktop icons', 'Menu toggle. Icons never show in captures.', 'Leave Finder desktop windows out of the filter', 1],
+  [99, 'Custom wallpaper', 'Clean wallpaper behind captures and recordings', 'Draw the chosen wallpaper as the bottom layer of the capture', 1],
+  [108, 'Beautiful single-window capture', 'One window alone, with shadow, nothing behind it', '<code>SCContentFilter(desktopIndependentWindow:)</code>', 1],
+  [124, 'Pin screenshot (float on top)', 'Floating window with size and opacity, plus lock mode', '<code>NSPanel</code> at floating level; lock = <code>ignoresMouseEvents</code>', 3],
+  [135, 'Hundreds of settings', 'Settings window: hotkeys, save folder, card behavior, formats', 'SwiftUI <code>Settings</code> scene', 1],
+  ['Capture modes (features page)'],
+  [null, 'Capture Area', 'Drag a box, with pixel size shown', 'Overlay window per display on top of a frozen frame', 1],
+  [null, 'Capture Window', 'Hover to highlight, click to capture', '<code>SCShareableContent</code> window list', 1],
+  [null, 'Capture Fullscreen', 'The display under the mouse', '<code>SCContentFilter(display:)</code>', 1],
+  [null, 'Freeze screen', 'Select on a still image, so menus and hovers stay', 'Capture first, then show the overlay on that frame', 1],
+  [null, 'Crosshair + magnifier', 'Crosshair, zoomed loupe, pixel grid, and coordinates', 'Draw from the frozen frame', 1],
+  [null, 'Self-Timer', '3, 5, or 10 second countdown', 'Timer, then capture', 3],
+  [null, 'All-In-One mode', 'One hotkey, then pick area, window, scroll, record, or OCR', 'Mode bar on the overlay', 3],
+  ['Quick Access Overlay (features page)'],
+  [null, 'Copy / Save / Annotate', 'Buttons on the card', 'Inbox file + <code>NSPasteboard</code>', 1],
+  [null, 'Restore recently closed overlay', 'Bring back the last card', 'Keep the last closed card in memory', 1],
+  [null, 'Auto-close, position, size, multi-display', 'Settings for each', 'Settings', 1],
+  [null, 'Swipe gestures on the card', 'Swipe left to close, right to save', '<code>NSEvent</code> swipe / scroll handling', 3],
+  [null, 'Capture history (1 month)', 'The shared Navi history at ⇧⌘V', 'NaviCore Inbox', 'done'],
+  ['Annotate (features page)'],
+  [null, 'Arrow, rectangle, filled rect, ellipse, line', 'Shape tools', 'SwiftUI <code>Path</code> shapes', 2],
+  [null, 'Pencil, highlighter, text, counter', 'Drawing and labels', 'SwiftUI canvas', 2],
+  [null, 'Blur, pixelate, spotlight', 'Hide or focus areas', 'Core Image filters', 2],
+  [null, 'Crop, rotate, flip, resize', 'Image edits', 'Core Graphics', 2],
+  [null, 'Color picker', 'Pick any color, including from the screen', '<code>NSColorSampler</code>', 2],
+  [null, 'Combine images, own file format, "Drag me"', 'Merge captures, keep edits editable, drag the result out', 'JSON + PNG bundle', 2],
+  ['Recording (features page)'],
+  [null, 'Mic + computer audio', 'Toggles on the record bar', 'ScreenCaptureKit audio + mic capture', 5],
+  [null, 'Camera', 'Round camera bubble', '<code>AVCaptureSession</code> in a floating window', 5],
+  [null, 'Show clicks + keystrokes', 'Ripples and a key pill, burned into the video', 'Listen-only <code>CGEventTap</code>', 5],
+  [null, 'Video editor (smart zoom, cursor, motion blur)', 'Screen Studio-style polish', 'Core Animation + AVFoundation', 5],
+  ['Other (features page)'],
+  [null, 'Text recognition (OCR) + QR codes', 'Select an area and get its text copied', 'Vision, on-device', 3],
+  [null, 'Background tool, presets, auto balance, aspect ratio', 'Pretty backgrounds for shots', 'Core Graphics', 4],
+  [null, 'Dark and light mode', 'Follows the system', 'SwiftUI', 1],
+  [null, 'Cloud: links, custom domain, teams, comments', 'Not built', '—', 'x'],
+];
+const mb = document.getElementById('mapBody');
+for (const r of MAP) {
+  const tr = document.createElement('tr');
+  if (r.length === 1) { tr.className = 'group'; tr.innerHTML = `<td colspan="5">${r[0]}</td>`; }
+  else {
+    const [t, f, n, how, s] = r;
+    const ts = t == null ? '' : `<a href="${V}${t}s" target="_blank">${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</a>`;
+    tr.innerHTML = `<td class="t">${ts}</td><td>${f}</td><td>${n}</td><td>${how}</td><td><span class="pill ${S[s][0]}">${S[s][1]}</span></td>`;
+  }
+  mb.appendChild(tr);
+}
+
+/* ---------------- prototype ---------------- */
+const $ = id => document.getElementById(id);
+const screen = $('screen'), desktop = $('desktop'), overlay = $('overlay'), menu = $('menu');
+let scale = 1;
+function fit() {
+  const narrow = window.innerWidth < 1000;
+  const avail = narrow ? window.innerWidth - 24 : Math.min(window.innerWidth - 48 - 320, 1100);
+  scale = Math.max(.3, avail / 1100);
+  $('scaler').style.transform = `scale(${scale})`;
+  $('scaler').style.width = 1100 * scale + 'px'; $('scaler').style.height = 690 * scale + 'px';
+}
+window.addEventListener('resize', fit); fit();
+function pt(e) { const r = screen.getBoundingClientRect(); return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale }; }
+function toast(msg, ms = 2600) {
+  const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = msg; screen.appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+
+/* snapshot: a scaled clone of part of the screen */
+function snapshot(rect, w, h, { withMenubar = false, bg = null } = {}) {
+  const box = document.createElement('div');
+  box.style.cssText = `position:relative;width:${w}px;height:${h}px;overflow:hidden;`;
+  const pad = bg ? 0.12 : 0;
+  const innerW = w * (1 - pad * 2), innerH = h * (1 - pad * 2);
+  const s = Math.min(innerW / rect.w, innerH / rect.h);
+  if (bg) box.style.background = bg;
+  const clip = document.createElement('div');
+  clip.style.cssText = `position:absolute;left:${(w - rect.w * s) / 2}px;top:${(h - rect.h * s) / 2}px;width:${rect.w * s}px;height:${rect.h * s}px;overflow:hidden;${bg ? 'border-radius:6px;box-shadow:0 8px 20px #0008;' : ''}`;
+  const src = rect.only ? rect.only.cloneNode(true) : desktop.cloneNode(true);
+  src.removeAttribute('id'); src.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  src.classList.remove('hl');
+  if (rect.only) { src.style.left = '0'; src.style.top = '0'; src.style.position = 'absolute'; }
+  else if (desktop.classList.contains('clean')) src.classList.add('clean');
+  const layer = document.createElement('div');
+  layer.style.cssText = `position:absolute;left:0;top:0;width:1100px;height:690px;transform-origin:0 0;transform:scale(${s}) translate(${rect.only ? 0 : -rect.x}px,${rect.only ? 0 : -rect.y}px);`;
+  layer.appendChild(src);
+  if (withMenubar) { const mbc = document.querySelector('.menubar').cloneNode(true); mbc.querySelectorAll('[id]').forEach(n => n.removeAttribute('id')); layer.appendChild(mbc); }
+  clip.appendChild(layer); box.appendChild(clip);
+  return box;
+}
+
+/* ---------- menu ---------- */
+$('naviIcon').onclick = e => { e.stopPropagation(); menu.classList.toggle('on'); $('naviIcon').classList.toggle('open', menu.classList.contains('on')); };
+document.addEventListener('click', () => { menu.classList.remove('on'); $('naviIcon').classList.remove('open'); });
+menu.onclick = e => {
+  const it = e.target.closest('.item'); if (!it) return;
+  e.stopPropagation(); menu.classList.remove('on'); $('naviIcon').classList.remove('open');
+  ({ area: () => startSelect('area'), window: startWindow, full: captureFull, timer: selfTimer, scroll: () => startSelect('scroll'),
+     ocr: () => startSelect('ocr'), rec: () => startSelect('rec'), hist: openHistory, icons: toggleIcons, restore: restoreCard })[it.dataset.act]();
+};
+function toggleIcons() {
+  desktop.classList.toggle('clean');
+  $('iconsItem').classList.toggle('check', desktop.classList.contains('clean'));
+  toast(desktop.classList.contains('clean') ? 'Desktop icons hidden and clean wallpaper set. Only captures change. Your real desktop stays the same.' : 'Desktop icons back');
+}
+
+/* ---------- selection overlay ---------- */
+let mode = null, start = null;
+const sel = $('sel'), selSize = $('selSize'), mag = $('mag');
+const MODE_TAG = { area: 'Drag to capture · Space for window · Esc to cancel', scroll: 'Select the area to scroll', ocr: 'Select text to copy', rec: 'Select the area to record' };
+function startSelect(m) {
+  mode = m; start = null;
+  overlay.className = 'on'; sel.style.display = 'none'; selSize.style.display = 'none'; $('winHl').style.display = 'none';
+  $('modeTag').textContent = MODE_TAG[m];
+  const z = mag.querySelector('.zoom'); z.innerHTML = '';
+  const c = desktop.cloneNode(true); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach(n => n.removeAttribute('id')); c.style.cssText = 'position:absolute;left:0;top:0;width:1100px;height:690px;';
+  z.appendChild(c); z.style.width = '1100px'; z.style.height = '690px';
+}
+function endOverlay() { overlay.className = ''; mode = null; start = null; }
+overlay.addEventListener('mousemove', e => {
+  const p = pt(e);
+  if (mode === 'window') { highlightWindow(p); return; }
+  overlay.querySelector('.xh').style.top = p.y + 'px'; overlay.querySelector('.yh').style.left = p.x + 'px';
+  mag.style.left = (p.x + 18) + 'px'; mag.style.top = (p.y + 18) + 'px';
+  const z = mag.querySelector('.zoom'); z.style.transform = `scale(8) translate(${-(p.x - 55 / 8)}px, ${-(p.y - 55 / 8)}px)`;
+  mag.querySelector('.coord').textContent = `${Math.round(p.x * 2)} × ${Math.round(p.y * 2)}`;
+  if (start) {
+    const r = rectOf(start, p);
+    Object.assign(sel.style, { display: 'block', left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+    Object.assign(selSize.style, { display: 'block', left: r.x + 'px', top: (r.y + r.h + 6) + 'px' });
+    selSize.textContent = `${Math.round(r.w * 2)} × ${Math.round(r.h * 2)}`;
+  }
+});
+overlay.addEventListener('mousedown', e => { if (mode === 'window') return; start = pt(e); overlay.classList.add('selecting'); });
+overlay.addEventListener('mouseup', e => {
+  if (mode === 'window') { clickWindow(pt(e)); return; }
+  if (!start) return;
+  const r = rectOf(start, pt(e)); const m = mode; endOverlay();
+  if (r.w < 12 || r.h < 12) return;
+  flash();
+  ({ area: () => addCard('image', r), scroll: () => scrollCapture(r), ocr: () => ocr(r), rec: () => prepRecord(r) })[m]();
+});
+function rectOf(a, b) { return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) }; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (mode) endOverlay(); document.querySelectorAll('.modal.on').forEach(m => m.classList.remove('on')); }
+  if (e.key === ' ' && (mode === 'area')) { e.preventDefault(); startWindow(); }
+  else if (e.key === ' ' && mode === 'window') { e.preventDefault(); startSelect('area'); }
+  if (recording && recOpts.keys) showKey(e);
+});
+function flash() { const f = document.createElement('div'); f.style.cssText = 'position:absolute;inset:0;background:#fff;opacity:.5;z-index:99;transition:opacity .25s;pointer-events:none'; screen.appendChild(f); requestAnimationFrame(() => f.style.opacity = 0); setTimeout(() => f.remove(), 300); }
+
+/* window mode */
+function windowsAt(p) { return [...desktop.querySelectorAll('.win')].reverse().find(w => { const x = w.offsetLeft, y = w.offsetTop; return p.x >= x && p.x <= x + w.offsetWidth && p.y >= y && p.y <= y + w.offsetHeight; }); }
+function startWindow() { startSelect('area'); mode = 'window'; overlay.className = 'on windowMode'; $('modeTag').textContent = 'Click a window · Space for area · Esc to cancel'; }
+function highlightWindow(p) {
+  const w = windowsAt(p), hl = $('winHl');
+  if (!w) { hl.style.display = 'none'; return; }
+  Object.assign(hl.style, { display: 'block', left: w.offsetLeft + 'px', top: w.offsetTop + 'px', width: w.offsetWidth + 'px', height: w.offsetHeight + 'px' });
+}
+function clickWindow(p) {
+  const w = windowsAt(p); endOverlay(); if (!w) return; flash();
+  addCard('window', { x: w.offsetLeft, y: w.offsetTop, w: w.offsetWidth, h: w.offsetHeight, only: w, name: w.dataset.name });
+}
+function captureFull() { flash(); addCard('full', { x: 0, y: 0, w: 1100, h: 690 }); }
+function selfTimer() { countdown(3, captureFull); }
+function countdown(n, done) {
+  const c = $('countdown'); c.style.display = 'flex'; c.textContent = n;
+  const iv = setInterval(() => { n--; if (n === 0) { clearInterval(iv); c.style.display = 'none'; done(); } else c.textContent = n; }, 800);
+}
+
+/* ---------- cards ---------- */
+const captures = []; let lastClosed = null; let nextId = 1;
+function thumbFor(c, w, h) {
+  if (c.kind === 'window' && !c.edited) return snapshot(c.rect, w, h, { bg: 'linear-gradient(135deg,#a78bfa,#f472b6 50%,#fb923c)' });
+  if (c.edited) { const n = c.edited.cloneNode(true); const box = document.createElement('div'); box.style.cssText = `width:${w}px;height:${h}px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#2a2a2e`; const s = Math.min(w / c.edited.offsetWidth, h / c.edited.offsetHeight); n.style.transform = `scale(${s})`; n.style.transformOrigin = 'center'; n.style.flex = 'none'; box.appendChild(n); return box; }
+  if (c.kind === 'scroll') { const box = document.createElement('div'); box.style.cssText = `width:${w}px;height:${h}px;overflow:hidden;display:flex;flex-direction:column;align-items:center;background:#2a2a2e;padding-top:4px`; for (let i = 0; i < 3; i++) box.appendChild(snapshot(c.rect, w * .5, c.rect.h / c.rect.w * w * .5)); return box; }
+  return snapshot(c.rect, w, h, { withMenubar: c.kind === 'full' });
+}
+function addCard(kind, rect, extra = {}) {
+  const c = { id: nextId++, kind, rect, time: new Date(), ...extra };
+  captures.unshift(c); renderCard(c);
+}
+function renderCard(c) {
+  const el = document.createElement('div'); el.className = 'card'; el.draggable = true; el.dataset.id = c.id;
+  const t = document.createElement('div'); t.className = 'thumb'; t.appendChild(thumbFor(c, 210, 132)); el.appendChild(t);
+  const isVid = c.kind === 'video';
+  const badge = isVid ? `${c.format} · 0:${String(c.secs).padStart(2, '0')}` : c.kind === 'scroll' ? 'Scrolling · 3 screens' : c.kind === 'window' ? `${c.rect.name} window` : `${Math.round(c.rect.w * 2)} × ${Math.round(c.rect.h * 2)}`;
+  el.insertAdjacentHTML('beforeend', `<div class="badge">${badge}</div>
+    <div class="hover">
+      <button class="big" data-a="copy">Copy</button><button class="big" data-a="save">Save</button>
+      ${isVid ? `<div class="fmt"><button data-a="fmt" data-f="MP4" class="${c.format === 'MP4' ? 'on' : ''}">MP4</button><button data-a="fmt" data-f="GIF" class="${c.format === 'GIF' ? 'on' : ''}">GIF</button></div>` : ''}
+      ${isVid ? '' : '<button class="corner tl" data-a="pin" title="Pin">📌</button>'}
+      <button class="corner tr" data-a="close" title="Close">✕</button>
+      <button class="corner bl" data-a="${isVid ? 'trim' : 'edit'}" title="${isVid ? 'Trim' : 'Annotate'}">${isVid ? '✂' : '✎'}</button>
+      <button class="corner br" data-a="finder" title="Show in Finder (CleanShot has Cloud here)">📁</button>
+    </div>`);
+  el.onclick = e => {
+    const a = e.target.dataset.a; if (!a) return; e.stopPropagation();
+    const ext = isVid ? c.format.toLowerCase() : 'png';
+    if (a === 'copy') toast(`Copied ${isVid ? 'the ' + c.format + ' file' : 'the image'}. It's also in <kbd>⇧⌘V</kbd> history.`);
+    if (a === 'save') { toast(`Saved to ~/Pictures/Navi/Navi 2026-11-06 at 16.${String(10 + c.id).padStart(2, '0')}.${ext}`); closeCard(el, c); }
+    if (a === 'close') closeCard(el, c);
+    if (a === 'edit') openEditor(c, el);
+    if (a === 'pin') { pin(c); closeCard(el, c, true); }
+    if (a === 'trim') openTrim(c);
+    if (a === 'fmt') { c.format = e.target.dataset.f; const n = renderCard(c); el.replaceWith(n); toast(c.format === 'GIF' ? 'Converted to GIF (no sound, loops)' : 'Back to MP4'); }
+    if (a === 'finder') toast(`Shows the file in Finder. CleanShot puts Cloud upload here. Navi has no cloud. Drag the card itself into an app to share.`);
+  };
+  el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', c.id); el.style.opacity = .5; });
+  el.addEventListener('dragend', () => el.style.opacity = 1);
+  if (!el.isConnected && !document.querySelector(`.card[data-id="${c.id}"]`)) $('cards').appendChild(el);
+  return el;
+}
+function closeCard(el, c, silent) { el.style.transition = 'transform .25s, opacity .25s'; el.style.transform = 'translateX(-240px)'; el.style.opacity = 0; setTimeout(() => el.remove(), 250); lastClosed = c; }
+function restoreCard() { if (!lastClosed) return toast('No closed card to restore'); renderCard(lastClosed); lastClosed = null; }
+
+/* drag into Slack */
+const dz = $('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const c = captures.find(x => x.id == e.dataTransfer.getData('text/plain')); if (!c) return;
+  const m = document.createElement('div'); m.className = 'msg';
+  m.innerHTML = `<b>You</b> ${c.kind === 'video' ? 'here\'s the ' + c.format : 'look at this'}`;
+  const att = document.createElement('div'); att.className = 'att'; att.appendChild(thumbFor(c, 150, 90)); m.appendChild(document.createElement('br')); m.appendChild(att);
+  $('msgs').appendChild(m);
+  const all = $('msgs').children; if (all.length > 2) all[0].remove();
+});
+
+/* pin */
+function pin(c) {
+  const p = document.createElement('div'); p.className = 'pinned';
+  const w = Math.min(320, c.rect.w), h = w * c.rect.h / c.rect.w;
+  Object.assign(p.style, { left: '560px', top: '60px', width: w + 'px', height: h + 'px' });
+  p.appendChild(thumbFor(c, w, h));
+  p.insertAdjacentHTML('beforeend', `<div class="pctl">Opacity <input type="range" min="20" max="100" value="100"><button title="Lock (clicks pass through)">🔒</button><button title="Close">✕</button></div>`);
+  const [range, lock, x] = p.querySelectorAll('.pctl input, .pctl button');
+  range.oninput = () => p.style.opacity = range.value / 100;
+  lock.onclick = () => toast('Locked: clicks now pass through to the app below (real app only)');
+  x.onclick = () => p.remove();
+  p.addEventListener('mousedown', e => {
+    if (e.target.closest('.pctl')) return;
+    const s = pt(e), ox = p.offsetLeft, oy = p.offsetTop;
+    const mv = ev => { const q = pt(ev); p.style.left = ox + q.x - s.x + 'px'; p.style.top = oy + q.y - s.y + 'px'; };
+    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); };
+    addEventListener('mousemove', mv); addEventListener('mouseup', up);
+  });
+  screen.appendChild(p); toast('Pinned. It floats above every window. Hover it for opacity and lock.');
+}
+
+/* ---------- OCR ---------- */
+function ocr(r) {
+  const lines = [];
+  desktop.querySelectorAll('.win p, .win li, .win b, .msg').forEach(n => {
+    const sr = screen.getBoundingClientRect(), b = n.getBoundingClientRect();
+    const x = (b.left - sr.left) / scale, y = (b.top - sr.top) / scale, w = b.width / scale, h = b.height / scale;
+    if (x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y && n.children.length === 0) lines.push(n.textContent.trim());
+  });
+  const txt = [...new Set(lines)].filter(Boolean);
+  toast(txt.length ? `<b>Copied ${txt.length} line${txt.length > 1 ? 's' : ''} of text:</b><br>${txt.slice(0, 4).join('<br>')}${txt.length > 4 ? '<br>…' : ''}` : 'No text found here', 4200);
+}
+
+/* ---------- scrolling capture ---------- */
+function scrollCapture(r) {
+  const strip = $('scrollStrip'), body = $('stripBody'); body.innerHTML = ''; strip.style.display = 'block';
+  let n = 0;
+  const iv = setInterval(() => {
+    body.appendChild(snapshot(r, 148, 148 * r.h / r.w)); n++;
+    if (n === 3) { clearInterval(iv); setTimeout(() => { strip.style.display = 'none'; addCard('scroll', r); toast('Scrolling capture: 3 screens stitched into one tall image'); }, 500); }
+  }, 600);
+}
+
+/* ---------- recording ---------- */
+let recording = false, recTimer = null, recSecs = 0, recRect = null, notifTimer = null;
+const recOpts = { mic: false, audio: false, cam: false, clicks: true, keys: false };
+function prepRecord(r) {
+  recRect = r;
+  Object.assign($('recFrame').style, { display: 'block', left: r.x - 2 + 'px', top: r.y - 2 + 'px', width: r.w + 4 + 'px', height: r.h + 4 + 'px' });
+  const hud = $('recHud'); hud.style.display = 'flex'; $('recOpts').classList.remove('on');
+  $('recW').value = Math.round(r.w * 2); $('recH').value = Math.round(r.h * 2);
+  hud.style.left = Math.max(8, Math.min(1100 - 310, r.x + r.w / 2 - 150)) + 'px';
+  hud.style.top = (r.y + r.h + 150 < 690 ? r.y + r.h + 10 : Math.max(30, r.y - 150)) + 'px';
+}
+function setRecRect(r) {
+  recRect = r;
+  Object.assign($('recFrame').style, { left: r.x - 2 + 'px', top: r.y - 2 + 'px', width: r.w + 4 + 'px', height: r.h + 4 + 'px' });
+}
+['recW', 'recH'].forEach(id => $(id).addEventListener('change', () => {
+  const w = Math.max(40, Math.min(1100, +$('recW').value / 2)), h = Math.max(40, Math.min(690, +$('recH').value / 2));
+  setRecRect({ x: Math.min(recRect.x, 1100 - w), y: Math.min(recRect.y, 690 - h), w, h });
+}));
+$('recFull').onclick = e => { e.stopPropagation(); setRecRect({ x: 0, y: 26, w: 1100, h: 664 }); $('recW').value = 2200; $('recH').value = 1328; };
+$('recSettings').onclick = e => { e.stopPropagation(); $('recOpts').classList.toggle('on'); };
+$('recHud').addEventListener('click', e => {
+  e.stopPropagation();
+  const mic = e.target.closest('[data-opt="mic"]');
+  if (mic) { recOpts.mic = !recOpts.mic; mic.classList.toggle('on', recOpts.mic); mic.title = `Microphone (${recOpts.mic ? 'on' : 'off'})`; return; }
+  const box = e.target.closest('#recOpts input'); if (box) {
+    if (box.dataset.opt === 'icons') { if (box.checked !== desktop.classList.contains('clean')) toggleIcons(); }
+    else recOpts[box.dataset.opt] = box.checked;
+    return;
+  }
+  const row = e.target.closest('[data-rec]'); if (!row) return;
+  recFormat = row.dataset.rec; $('recHud').style.display = 'none'; countdown(3, startRecording);
+});
+let recFormat = 'MP4';
+function startRecording() {
+  recording = true; recSecs = 0; $('recPill').classList.add('on'); $('recTime').textContent = '0:00';
+  if (recOpts.cam) { const c = $('cam'); c.style.display = 'block'; c.style.left = recRect.x + recRect.w - 110 + 'px'; c.style.top = recRect.y + recRect.h - 110 + 'px'; }
+  recTimer = setInterval(() => { recSecs++; $('recTime').textContent = `0:${String(recSecs).padStart(2, '0')}`; }, 1000);
+  notifTimer = setTimeout(() => {
+    const n = document.createElement('div'); n.className = 'notif';
+    n.innerHTML = `<b>💬 Messages</b>hey are you free for lunch?<br><span class="tag">✓ Left out of the recording</span>`;
+    screen.appendChild(n); setTimeout(() => n.remove(), 4500);
+  }, 2200);
+  toast('Recording. Click around' + (recOpts.keys ? ' and type' : '') + '. Stop with the red pill in the menu bar.');
+}
+$('recPill').onclick = e => {
+  e.stopPropagation(); if (!recording) return;
+  recording = false; clearInterval(recTimer); clearTimeout(notifTimer);
+  $('recPill').classList.remove('on'); $('recFrame').style.display = 'none'; $('cam').style.display = 'none';
+  addCard('video', recRect, { format: recFormat, secs: Math.max(recSecs, 1) });
+};
+screen.addEventListener('mousedown', e => {
+  if (!recording || !recOpts.clicks) return;
+  const p = pt(e), r = document.createElement('div'); r.className = 'ripple'; r.style.left = p.x + 'px'; r.style.top = p.y + 'px';
+  screen.appendChild(r); setTimeout(() => r.remove(), 500);
+});
+let keyHide = null;
+function showKey(e) {
+  const k = $('keys'); const mods = (e.metaKey ? '⌘' : '') + (e.shiftKey ? '⇧' : '') + (e.altKey ? '⌥' : '') + (e.ctrlKey ? '⌃' : '');
+  k.textContent = mods + (e.key.length === 1 ? e.key.toUpperCase() : e.key); k.style.display = 'block';
+  clearTimeout(keyHide); keyHide = setTimeout(() => k.style.display = 'none', 900);
+}
+
+/* trim */
+let trimCap = null;
+function openTrim(c) {
+  trimCap = c; const film = $('film'); film.innerHTML = '';
+  for (let i = 0; i < 8; i++) { const f = document.createElement('div'); f.appendChild(snapshot(c.rect, 90, 70)); film.appendChild(f); }
+  const s = document.createElement('div'); s.className = 'trimSel'; s.style.left = '6%'; s.style.right = '12%'; film.appendChild(s);
+  const lbl = () => { const L = parseFloat(s.style.left) / 100, R = 1 - parseFloat(s.style.right) / 100; $('trimLbl').textContent = `${fmt(L * c.secs)} – ${fmt(R * c.secs)}  ·  ${fmt((R - L) * c.secs)} long`; };
+  const fmt = t => `0:${t.toFixed(1).padStart(4, '0')}`;
+  s.onmousedown = e => {
+    const fr = film.getBoundingClientRect(), sr = s.getBoundingClientRect();
+    const left = e.clientX - sr.left < sr.width / 2;
+    const mv = ev => { const v = Math.max(0, Math.min(1, (ev.clientX - fr.left) / fr.width)) * 100;
+      if (left) s.style.left = Math.min(v, 100 - parseFloat(s.style.right) - 8) + '%'; else s.style.right = Math.min(100 - v, 100 - parseFloat(s.style.left) - 8) + '%'; lbl(); };
+    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); };
+    addEventListener('mousemove', mv); addEventListener('mouseup', up);
+  };
+  lbl(); $('trim').classList.add('on');
+}
+$('trimCancel').onclick = () => $('trim').classList.remove('on');
+$('trimSave').onclick = () => { $('trim').classList.remove('on'); toast('Trimmed. The card now holds the shorter clip.'); };
+
+/* ---------- editor ---------- */
+let edCap = null, edCard = null, tool = 'arrow', counter = 1, undo = [];
+function openEditor(c, cardEl) {
+  edCap = c; edCard = cardEl; counter = 1; undo = [];
+  const maxW = Math.min(760, window.innerWidth - 90), maxH = 430, s = Math.min(maxW / c.rect.w, maxH / c.rect.h, 2);
+  const w = Math.round(c.rect.w * s), h = Math.round(c.rect.h * s);
+  const st = $('edStage'); st.innerHTML = ''; st.style.width = w + 'px'; st.style.height = h + 'px';
+  st.appendChild(snapshot(c.kind === 'window' ? { ...c.rect } : c.rect, w, h, { withMenubar: c.kind === 'full' }));
+  st.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 ${w} ${h}"><defs><marker id="ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs></svg>`);
+  $('edFrame').classList.toggle('bg', c.kind === 'window');
+  $('editor').classList.add('on');
+}
+$('tools').onclick = e => { const b = e.target.closest('[data-tool]'); if (!b) return; tool = b.dataset.tool; $('tools').querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', x === b)); };
+$('bgBtn').onclick = () => $('edFrame').classList.toggle('bg');
+$('undoBtn').onclick = () => { const n = undo.pop(); if (n) n.remove(); };
+$('edDone').onclick = () => {
+  const frame = $('edFrame').cloneNode(true); frame.removeAttribute('id'); frame.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  frame.querySelectorAll('[contenteditable]').forEach(n => n.removeAttribute('contenteditable'));
+  const holder = document.createElement('div'); holder.style.cssText = 'position:absolute;left:-9999px;top:0'; holder.appendChild(frame); document.body.appendChild(holder);
+  edCap.edited = frame; const fresh = renderCard(edCap); edCard.replaceWith(fresh);
+  setTimeout(() => holder.remove(), 0);
+  $('editor').classList.remove('on'); toast('Saved your markup to the card and the history');
+};
+function stagePt(e) { const r = $('edStage').getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+const NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; }
+$('edStage').addEventListener('mousedown', e => {
+  if (e.target.classList.contains('tbox')) return;
+  const st = $('edStage'), svg = st.querySelector('svg'), col = $('color').value, a = stagePt(e);
+  if (tool === 'counter') {
+    const g = svgEl('g', {}); g.appendChild(svgEl('circle', { cx: a.x, cy: a.y, r: 14, fill: col, stroke: '#fff', 'stroke-width': 2 }));
+    const t = svgEl('text', { x: a.x, y: a.y + 5, 'text-anchor': 'middle', fill: '#fff', 'font-size': 14, 'font-weight': 700, 'font-family': '-apple-system' }); t.textContent = counter++;
+    g.appendChild(t); svg.appendChild(g); undo.push(g); return;
+  }
+  if (tool === 'text') {
+    const d = document.createElement('div'); d.className = 'tbox'; d.contentEditable = true; d.style.left = a.x + 'px'; d.style.top = a.y - 12 + 'px'; d.style.color = col; d.textContent = 'Text';
+    st.appendChild(d); undo.push(d); setTimeout(() => { d.focus(); document.getSelection().selectAllChildren(d); }); return;
+  }
+  let node, box;
+  if (['blur', 'pix', 'spot', 'crop'].includes(tool)) {
+    box = document.createElement('div'); box.className = { blur: 'blurbox', pix: 'pixbox', spot: 'spot', crop: 'spot' }[tool];
+    if (tool === 'crop') box.style.outline = '2px dashed #fff';
+    st.appendChild(box); undo.push(box);
+  } else if (tool === 'pencil') { node = svgEl('path', { d: `M${a.x},${a.y}`, stroke: col, 'stroke-width': 4, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); }
+  else if (tool === 'arrow' || tool === 'line') { node = svgEl('line', { x1: a.x, y1: a.y, x2: a.x, y2: a.y, stroke: col, 'stroke-width': 5, 'stroke-linecap': 'round', ...(tool === 'arrow' ? { 'marker-end': 'url(#ah)' } : {}) }); }
+  else if (tool === 'ellipse') { node = svgEl('ellipse', { cx: a.x, cy: a.y, rx: 0, ry: 0, stroke: col, 'stroke-width': 4, fill: 'none' }); }
+  else { node = svgEl('rect', { x: a.x, y: a.y, width: 0, height: 0, rx: 4, stroke: tool === 'hi' ? 'none' : col, 'stroke-width': 4, fill: tool === 'fill' ? col : tool === 'hi' ? '#facc1566' : 'none' }); }
+  if (node) { svg.appendChild(node); undo.push(node); }
+  const mv = ev => {
+    const b = stagePt(ev), x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+    if (box) Object.assign(box.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+    else if (tool === 'pencil') node.setAttribute('d', node.getAttribute('d') + ` L${b.x},${b.y}`);
+    else if (tool === 'arrow' || tool === 'line') { node.setAttribute('x2', b.x); node.setAttribute('y2', b.y); }
+    else if (tool === 'ellipse') { node.setAttribute('cx', (a.x + b.x) / 2); node.setAttribute('cy', (a.y + b.y) / 2); node.setAttribute('rx', w / 2); node.setAttribute('ry', h / 2); }
+    else { node.setAttribute('x', x); node.setAttribute('y', y); node.setAttribute('width', w); node.setAttribute('height', h); }
+  };
+  const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); };
+  addEventListener('mousemove', mv); addEventListener('mouseup', up);
+});
+
+/* ---------- history ---------- */
+function openHistory() {
+  const rows = $('histRows'); rows.innerHTML = '';
+  const items = [...captures.slice(0, 5).map(c => ({ cap: c })), { t: 'https://cleanshot.com/features' }, { t: 'swift test' }, { t: 'Ship before Thanksgiving.' }];
+  items.forEach((it, i) => {
+    const r = document.createElement('div'); r.className = 'hrow' + (i === 0 ? ' sel' : '') + (it.cap ? ' img' : '');
+    if (it.cap) { const m = document.createElement('div'); m.className = 'mini'; m.appendChild(thumbFor(it.cap, 70, 40)); r.appendChild(m);
+      r.insertAdjacentHTML('beforeend', `<span class="tag">${{ image: 'Screenshot', window: 'Window', full: 'Fullscreen', scroll: 'Scrolling', video: it.cap.format }[it.cap.kind]}</span>`); }
+    else r.insertAdjacentHTML('beforeend', `<span>${it.t}</span>`);
+    r.insertAdjacentHTML('beforeend', `<span class="k">⌘ ${i + 1}</span>`); rows.appendChild(r);
+  });
+  if (!captures.length) rows.insertAdjacentHTML('afterbegin', '<div class="hrow" style="color:#999">Take a capture first to see it here.</div>');
+  $('hist').classList.add('on');
+}
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('mousedown', e => { if (e.target === m) m.classList.remove('on'); }));
+</script>
+</body>
+</html>

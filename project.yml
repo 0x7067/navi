@@ -1,0 +1,37 @@
+name: Navi
+options:
+  bundleIdPrefix: com.donovanhiland
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  NaviCore:
+    path: Packages/NaviCore
+  NaviClipboard:
+    path: Packages/NaviClipboard
+targets:
+  Navi:
+    type: application
+    platform: macOS
+    sources: [App/Sources]
+    dependencies:
+      - package: NaviCore
+      - package: NaviClipboard
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Navi
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.productivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.donovanhiland.navi
+        DEVELOPMENT_TEAM: 77SAW76597
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Development"
+        ENABLE_HARDENED_RUNTIME: YES
