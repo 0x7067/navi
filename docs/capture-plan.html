@@ -281,7 +281,6 @@
           <hr>
           <div class="item" data-act="hist">Open History <span>⇧⌘V</span></div>
           <div class="item" data-act="icons" id="iconsItem">Hide Desktop Icons <span></span></div>
-          <div class="item" data-act="restore">Restore Closed Card <span>⇧⌘Z</span></div>
         </div>
 
         <div id="cards"></div>
@@ -337,7 +336,7 @@
       </div>
       <div class="box">
         <h3>In the real app</h3>
-        Esc cancels any capture. Space switches between area and window mode. Cards close on their own after a set time, and Restore brings one back.
+        Esc cancels any capture. Space switches between area and window mode. Cards stay until you close them.
       </div>
     </div>
   </div>
@@ -418,7 +417,7 @@
         <li>Capture area, window, and fullscreen with ScreenCaptureKit (<code>SCScreenshotManager</code>).</li>
         <li>Freeze the screen first, then select on the frozen image. Crosshair, magnifier, pixel size. <kbd>Space</kbd> switches to window mode. Snap to window edges.</li>
         <li><b>Window capture with nothing behind it:</b> <code>SCContentFilter(desktopIndependentWindow:)</code> captures one window alone, with its shadow and a clear background.</li>
-        <li><b>Corner card (CleanShot layout):</b> on hover, the card blurs and shows round <b>Copy</b> and <b>Save</b> buttons in the middle. Corners: Pin (top left), Close (top right), Annotate or Trim (bottom left), and Show in Finder (bottom right, where CleanShot has Cloud). Drag it into any app (a file drag with the PNG). Auto-close timer. Restore the last closed card. Works on every display.</li>
+        <li><b>Corner card (CleanShot layout):</b> on hover, the card blurs and shows round <b>Copy</b> and <b>Save</b> buttons in the middle. Corners: Pin (top left), Close (top right), Annotate or Trim (bottom left), and Show in Finder (bottom right, where CleanShot has Cloud). Drag it into any app (a file drag with the PNG). Works on every display.</li>
         <li><b>Hide desktop icons:</b> leave Finder's desktop icon windows out of the capture filter, and draw a clean wallpaper behind them. The real desktop stays as it is.</li>
         <li>Every capture goes into the Inbox and shows up in <kbd>⇧⌘V</kbd> with a thumbnail.</li>
       </ul>
@@ -462,11 +461,11 @@
       <li><b>Input Monitoring:</b> only for the keystroke overlay (step 5).</li>
     </ul>
 
-    <h2>Open questions</h2>
+    <h2>Decided</h2>
     <ul>
-      <li><b>Hotkeys:</b> should Navi take over <kbd>⇧⌘3</kbd>, <kbd>⇧⌘4</kbd>, and <kbd>⇧⌘5</kbd> from macOS, like CleanShot does? You turn off the system shortcuts in System Settings first.</li>
-      <li><b>Save folder:</b> Desktop, or <code>~/Pictures/Navi</code>?</li>
-      <li><b>Card auto-close:</b> after how many seconds? Or never?</li>
+      <li><b>Hotkeys:</b> Navi borrows <kbd>⇧⌘3</kbd> and <kbd>⇧⌘4</kbd> from macOS while it runs. It turns the macOS shortcuts off at launch and puts them back on quit. <kbd>⇧⌘5</kbd> comes with recording.</li>
+      <li><b>Save folder:</b> the Desktop.</li>
+      <li><b>Card auto-close:</b> never. Close with ✕, Copy, Save, <kbd>⌘W</kbd> on hover, or Close All Cards.</li>
     </ul>
   </div>
 </section>
@@ -507,7 +506,7 @@ const MAP = [
   [null, 'All-In-One mode', 'One hotkey, then pick area, window, scroll, record, or OCR', 'Mode bar on the overlay', 3],
   ['Quick Access Overlay (features page)'],
   [null, 'Copy / Save / Annotate', 'Buttons on the card', 'Inbox file + <code>NSPasteboard</code>', 1],
-  [null, 'Restore recently closed overlay', 'Bring back the last card', 'Keep the last closed card in memory', 1],
+  [null, 'Restore recently closed overlay', 'Not built. Closed shots stay in ⇧⌘V history', '—', 'x'],
   [null, 'Auto-close, position, size, multi-display', 'Settings for each', 'Settings', 1],
   [null, 'Swipe gestures on the card', 'Swipe left to close, right to save', '<code>NSEvent</code> swipe / scroll handling', 3],
   [null, 'Capture history (1 month)', 'The shared Navi history at ⇧⌘V', 'NaviCore Inbox', 'done'],

@@ -1,0 +1,65 @@
+import CoreGraphics
+import Foundation
+import Testing
+
+@testable import NaviCapture
+
+@Suite struct CaptureGeometryTests {
+    @Test func flipConvertsBothWays() {
+        let cocoa = CGRect(x: 10, y: 100, width: 50, height: 20)
+        let quartz = CaptureGeometry.flip(cocoa, primaryHeight: 1000)
+        #expect(quartz == CGRect(x: 10, y: 880, width: 50, height: 20))
+        #expect(CaptureGeometry.flip(quartz, primaryHeight: 1000) == cocoa)
+    }
+
+    @Test func rectFromAnyTwoCorners() {
+        let rect = CaptureGeometry.rect(from: CGPoint(x: 30, y: 5), to: CGPoint(x: 10, y: 25))
+        #expect(rect == CGRect(x: 10, y: 5, width: 20, height: 20))
+    }
+
+    @Test func pixelRectFlipsAndScalesForRetina() {
+        // A 100 x 50 point view with a 2x image. The selection sits in the bottom-left corner.
+        let rect = CaptureGeometry.pixelRect(
+            forSelection: CGRect(x: 0, y: 0, width: 10, height: 10),
+            viewSize: CGSize(width: 100, height: 50),
+            imageSize: CGSize(width: 200, height: 100)
+        )
+        #expect(rect == CGRect(x: 0, y: 80, width: 20, height: 20))
+    }
+
+    @Test func pixelRectStaysInsideTheImage() {
+        let rect = CaptureGeometry.pixelRect(
+            forSelection: CGRect(x: 90, y: -5, width: 20, height: 20),
+            viewSize: CGSize(width: 100, height: 50),
+            imageSize: CGSize(width: 100, height: 50)
+        )
+        #expect(rect == CGRect(x: 90, y: 35, width: 10, height: 15))
+    }
+
+    @Test func pixelUnderPoint() {
+        let pixel = CaptureGeometry.pixel(
+            at: CGPoint(x: 10.6, y: 49.9), viewSize: CGSize(width: 100, height: 50), imageSize: CGSize(width: 200, height: 100)
+        )
+        #expect(pixel.x == 21)
+        #expect(pixel.y == 0)
+    }
+
+    @Test func snapPicksTheNearestEdgeInTolerance() {
+        #expect(CaptureGeometry.snap(103, to: [100, 105], tolerance: 6) == 105)
+        #expect(CaptureGeometry.snap(103, to: [100, 200], tolerance: 6) == 100)
+        #expect(CaptureGeometry.snap(120, to: [100, 200], tolerance: 6) == 120)
+    }
+
+    @Test func fileNameUsesTheCleanShotStyle() throws {
+        let utc = try #require(TimeZone(identifier: "UTC"))
+        let date = Date(timeIntervalSince1970: 1_793_982_612) // 2026-11-06 16:30:12 UTC
+        #expect(CaptureGeometry.fileName(for: date, fileExtension: "png", timeZone: utc) == "Navi 2026-11-06 at 16.30.12.png")
+    }
+
+    @Test func uniqueURLAddsANumber() {
+        let folder = URL(filePath: "/tmp/x", directoryHint: .isDirectory)
+        let taken: Set<String> = ["/tmp/x/a.png", "/tmp/x/a (2).png"]
+        let url = CaptureGeometry.uniqueURL(in: folder, name: "a.png") { taken.contains($0.path) }
+        #expect(url.lastPathComponent == "a (3).png")
+    }
+}

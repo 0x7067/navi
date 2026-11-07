@@ -1,0 +1,215 @@
+import AppKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
+
+/// Draws the marks on top of the base image. The editor and the export use the same code.
+@MainActor
+final class AnnotationRenderer {
+    private let ciContext = CIContext()
+    private var effectsBase: CGImage?
+    private var blurred: CGImage?
+    private var pixelated: CGImage?
+
+    /// Draws `marks` on `base`, plus an optional selection outline.
+    func render(base: CGImage, marks: [Annotation], selection: UUID? = nil) -> CGImage? {
+        let width = base.width, height = base.height
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        // Work in image pixels with the origin at the top left, like the marks.
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: 1, y: -1)
+        let full = CGRect(x: 0, y: 0, width: width, height: height)
+        Self.draw(base, in: full, context: context)
+
+        let effects = marks.filter { $0.kind == .blur || $0.kind == .pixelate }
+        if !effects.isEmpty { prepareEffects(for: base) }
+        for mark in effects {
+            guard let image = mark.kind == .blur ? blurred : pixelated else { continue }
+            context.saveGState()
+            context.clip(to: CaptureGeometry.rect(from: mark.start, to: mark.end))
+            Self.draw(image, in: full, context: context)
+            context.restoreGState()
+        }
+
+        let spots = marks.filter { $0.kind == .spotlight }
+        if !spots.isEmpty {
+            context.saveGState()
+            context.addRect(full)
+            for spot in spots { context.addEllipse(in: CaptureGeometry.rect(from: spot.start, to: spot.end)) }
+            context.setFillColor(CGColor(gray: 0, alpha: 0.55))
+            context.fillPath(using: .evenOdd)
+            context.restoreGState()
+        }
+
+        let graphics = NSGraphicsContext(cgContext: context, flipped: true)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = graphics
+        for mark in marks { draw(mark, context: context) }
+        if let selection, let mark = marks.first(where: { $0.id == selection }) {
+            context.setStrokeColor(CGColor(srgbRed: 0.2, green: 0.55, blue: 1, alpha: 1))
+            context.setLineWidth(max(2, CGFloat(width) / 800))
+            context.setLineDash(phase: 0, lengths: [8, 6])
+            context.stroke(mark.bounds.insetBy(dx: -6, dy: -6))
+            context.setLineDash(phase: 0, lengths: [])
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        return context.makeImage()
+    }
+
+    // MARK: Marks
+
+    private func draw(_ mark: Annotation, context: CGContext) {
+        let width = CGFloat(mark.lineWidth)
+        context.setStrokeColor(mark.color.cgColor)
+        context.setFillColor(mark.color.cgColor)
+        context.setLineWidth(width)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        let rect = CaptureGeometry.rect(from: mark.start, to: mark.end)
+
+        switch mark.kind {
+        case .arrow:
+            drawArrow(from: mark.start, to: mark.end, width: width, context: context)
+        case .line:
+            context.move(to: mark.start)
+            context.addLine(to: mark.end)
+            context.strokePath()
+        case .rectangle:
+            context.addPath(CGPath(roundedRect: rect, cornerWidth: width, cornerHeight: width, transform: nil))
+            context.strokePath()
+        case .filledRectangle:
+            context.addPath(CGPath(roundedRect: rect, cornerWidth: width, cornerHeight: width, transform: nil))
+            context.fillPath()
+        case .ellipse:
+            context.strokeEllipse(in: rect)
+        case .pencil:
+            stroke(mark.points, context: context)
+        case .highlighter:
+            context.saveGState()
+            context.setBlendMode(.multiply)
+            context.setStrokeColor(mark.color.cgColor.copy(alpha: 0.45) ?? mark.color.cgColor)
+            context.setLineWidth(width * 4)
+            context.setLineCap(.square)
+            stroke(mark.points, context: context)
+            context.restoreGState()
+        case .text:
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: CGFloat(mark.fontSize), weight: .bold),
+                .foregroundColor: NSColor(cgColor: mark.color.cgColor) ?? .red,
+                .strokeColor: NSColor.white,
+                .strokeWidth: -2.5,
+            ]
+            (mark.text ?? "").draw(at: mark.start, withAttributes: attributes)
+        case .counter:
+            let radius = CGFloat(mark.fontSize) * 0.8
+            let circle = CGRect(x: mark.start.x - radius, y: mark.start.y - radius, width: radius * 2, height: radius * 2)
+            context.fillEllipse(in: circle)
+            let label = "\(mark.number ?? 1)" as NSString
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: CGFloat(mark.fontSize), weight: .heavy),
+                .foregroundColor: NSColor.white,
+            ]
+            let size = label.size(withAttributes: attributes)
+            label.draw(at: CGPoint(x: circle.midX - size.width / 2, y: circle.midY - size.height / 2), withAttributes: attributes)
+        case .image:
+            guard let data = mark.imagePNG,
+                  let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+            else { return }
+            context.saveGState()
+            context.setShadow(offset: CGSize(width: 0, height: 6), blur: 20, color: CGColor(gray: 0, alpha: 0.4))
+            Self.draw(image, in: rect, context: context)
+            context.restoreGState()
+        case .blur, .pixelate, .spotlight:
+            break // Drawn before the marks.
+        }
+    }
+
+    private func stroke(_ points: [CGPoint], context: CGContext) {
+        guard let first = points.first else { return }
+        context.move(to: first)
+        for point in points.dropFirst() { context.addLine(to: point) }
+        if points.count == 1 { context.addLine(to: first) }
+        context.strokePath()
+    }
+
+    private func drawArrow(from start: CGPoint, to end: CGPoint, width: CGFloat, context: CGContext) {
+        let dx = end.x - start.x, dy = end.y - start.y
+        let length = hypot(dx, dy)
+        guard length > 1 else { return }
+        let angle = atan2(dy, dx)
+        let headLength = min(length * 0.6, max(width * 4.5, 18))
+        let headWidth = headLength * 0.9
+        let base = CGPoint(x: end.x - cos(angle) * headLength * 0.8, y: end.y - sin(angle) * headLength * 0.8)
+        context.move(to: start)
+        context.addLine(to: base)
+        context.strokePath()
+        let back = CGPoint(x: end.x - cos(angle) * headLength, y: end.y - sin(angle) * headLength)
+        let normal = CGVector(dx: -sin(angle) * headWidth / 2, dy: cos(angle) * headWidth / 2)
+        context.move(to: end)
+        context.addLine(to: CGPoint(x: back.x + normal.dx, y: back.y + normal.dy))
+        context.addLine(to: CGPoint(x: back.x - normal.dx, y: back.y - normal.dy))
+        context.closePath()
+        context.fillPath()
+    }
+
+    // MARK: Effects
+
+    private func prepareEffects(for base: CGImage) {
+        guard effectsBase !== base else { return }
+        effectsBase = base
+        let input = CIImage(cgImage: base)
+        let extent = input.extent
+        let size = Double(max(base.width, base.height))
+
+        let blur = CIFilter.gaussianBlur()
+        blur.inputImage = input.clampedToExtent()
+        blur.radius = Float(max(10, size / 120))
+        blurred = blur.outputImage.flatMap { ciContext.createCGImage($0.cropped(to: extent), from: extent) }
+
+        let pixellate = CIFilter.pixellate()
+        pixellate.inputImage = input.clampedToExtent()
+        pixellate.scale = Float(max(10, size / 90))
+        pixelated = pixellate.outputImage.flatMap { ciContext.createCGImage($0.cropped(to: extent), from: extent) }
+    }
+
+    /// Draws an image right side up in a context whose origin is at the top left.
+    nonisolated static func draw(_ image: CGImage, in rect: CGRect, context: CGContext) {
+        context.saveGState()
+        context.translateBy(x: rect.minX, y: rect.maxY)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(image, in: CGRect(origin: .zero, size: rect.size))
+        context.restoreGState()
+    }
+}
+
+/// Changes to the base image: rotate, flip, crop, resize.
+enum ImageOps {
+    static func apply(_ edit: ImageEdit, to image: CGImage) -> CGImage? {
+        let size = CGSize(width: image.width, height: image.height)
+        if case let .crop(rect) = edit {
+            return image.cropping(to: rect.integral.intersection(CGRect(origin: .zero, size: size)))
+        }
+        let (transform, newSize) = edit.transform(for: size)
+        guard let context = CGContext(
+            data: nil, width: Int(newSize.width), height: Int(newSize.height), bitsPerComponent: 8, bytesPerRow: 0,
+            space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .high
+        // The transform is for top-left origin points. Wrap it in flips so it works in Core Graphics space.
+        context.translateBy(x: 0, y: newSize.height)
+        context.scaleBy(x: 1, y: -1)
+        context.concatenate(transform)
+        AnnotationRenderer.draw(image, in: CGRect(origin: .zero, size: size), context: context)
+        return context.makeImage()
+    }
+
+    static func png(_ image: CGImage, pointSize: CGSize) -> Data? {
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        bitmap.size = pointSize
+        return bitmap.representation(using: .png, properties: [:])
+    }
+}

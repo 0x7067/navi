@@ -95,4 +95,19 @@ struct InboxTests {
         inbox.clearUnpinned()
         #expect(inbox.items.map(\.text) == ["keep"])
     }
+
+    @Test func updatingAFileKeepsTheItemAndRemovingDeletesMarkup() throws {
+        let inbox = Inbox(directory: directory)
+        let item = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .screenshot))
+        #expect(inbox.updateFile(item.id, data: Data([4, 5])))
+        let url = try #require(inbox.fileURL(for: item))
+        #expect(try Data(contentsOf: url) == Data([4, 5]))
+        #expect(inbox.items.first?.id == item.id)
+        #expect(inbox.items.first?.contentHash != item.contentHash)
+
+        let markup = inbox.markupURL(for: item.id)
+        try FileManager.default.createDirectory(at: markup, withIntermediateDirectories: true)
+        inbox.remove(item.id)
+        #expect(!FileManager.default.fileExists(atPath: markup.path))
+    }
 }

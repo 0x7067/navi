@@ -14,6 +14,12 @@ packages:
     path: Packages/NaviCore
   NaviClipboard:
     path: Packages/NaviClipboard
+  NaviCapture:
+    path: Packages/NaviCapture
+  NaviRecording:
+    path: Packages/NaviRecording
+  NaviDictation:
+    path: Packages/NaviDictation
 targets:
   Navi:
     type: application
@@ -22,12 +28,23 @@ targets:
     dependencies:
       - package: NaviCore
       - package: NaviClipboard
+      - package: NaviCapture
+      - package: NaviRecording
+      - package: NaviDictation
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Navi
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: Navi uses the microphone for talk to type, and for your voice in screen recordings.
+        NSSpeechRecognitionUsageDescription: Navi turns your speech into text on this Mac.
+        NSCameraUsageDescription: Navi shows your camera in a bubble while you record.
+    entitlements:
+      path: App/Navi.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
+        com.apple.security.device.camera: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.donovanhiland.navi

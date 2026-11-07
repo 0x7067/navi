@@ -72,6 +72,23 @@ public final class Inbox {
 
     // MARK: Changing
 
+    /// Replaces the file content of an item, for example after markup. The item keeps its place.
+    @discardableResult
+    public func updateFile(_ id: UUID, data: Data) -> Bool {
+        guard let index = items.firstIndex(where: { $0.id == id }),
+              let url = fileURL(for: items[index])
+        else { return false }
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            logger.error("Could not update capture file: \(error.localizedDescription)")
+            return false
+        }
+        items[index].contentHash = Self.hash(data)
+        save()
+        return true
+    }
+
     /// Moves an item to the top of its group (pinned or unpinned). Used after a paste.
     public func touch(_ id: UUID, now: Date = .now) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
@@ -112,6 +129,16 @@ public final class Inbox {
 
     public func fileURL(for item: CaptureItem) -> URL? {
         item.fileName.map { filesDirectory.appending(path: $0) }
+    }
+
+    /// A PNG preview for items whose file is not an image, such as a recording. It may not exist.
+    public func previewURL(for id: UUID) -> URL {
+        filesDirectory.appending(path: "\(id.uuidString).preview.png")
+    }
+
+    /// Folder for an item's editable markup (`<id>.navi`). It may not exist yet.
+    public func markupURL(for id: UUID) -> URL {
+        filesDirectory.appending(path: "\(id.uuidString).navi", directoryHint: .isDirectory)
     }
 
     // MARK: Private
@@ -166,6 +193,8 @@ public final class Inbox {
     }
 
     private func deleteFile(of item: CaptureItem) {
+        try? FileManager.default.removeItem(at: markupURL(for: item.id))
+        try? FileManager.default.removeItem(at: previewURL(for: item.id))
         guard let url = fileURL(for: item) else { return }
         try? FileManager.default.removeItem(at: url)
     }

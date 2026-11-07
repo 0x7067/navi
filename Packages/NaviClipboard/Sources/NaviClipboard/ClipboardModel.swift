@@ -37,7 +37,8 @@ final class ClipboardModel {
     /// Mouse position at the last hover. Rows that move under a still mouse must not steal the selection.
     @ObservationIgnored var lastHoverLocation: CGPoint?
 
-    @ObservationIgnored private let images = NSCache<NSUUID, NSImage>()
+    /// Keyed by item ID and content hash, so an edited capture shows its new image.
+    @ObservationIgnored private let images = NSCache<NSString, NSImage>()
 
     init(inbox: Inbox) {
         self.inbox = inbox
@@ -102,9 +103,11 @@ final class ClipboardModel {
     }
 
     func image(for item: CaptureItem) -> NSImage? {
-        let key = item.id as NSUUID
+        let key = "\(item.id.uuidString)-\(item.contentHash)" as NSString
         if let cached = images.object(forKey: key) { return cached }
-        guard let url = inbox.fileURL(for: item), let image = NSImage(contentsOf: url) else { return nil }
+        let preview = inbox.previewURL(for: item.id)
+        let url = FileManager.default.fileExists(atPath: preview.path) ? preview : inbox.fileURL(for: item)
+        guard let url, let image = NSImage(contentsOf: url) else { return nil }
         images.setObject(image, forKey: key)
         return image
     }

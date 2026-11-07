@@ -5,9 +5,9 @@ A macOS menu bar app for capture. It combines four tools:
 | Feature | Model app | Status |
 |---|---|---|
 | Clipboard history | Maccy | Done (v0.1) |
-| Screenshot with markup | CleanShot X | Next. See the plan |
-| Talk to type | Wispr Flow | Later |
-| Screen recording | CleanShot X, then Screen Studio | Last |
+| Screenshot with markup | CleanShot X | Steps 1–4 built. Step 1 checked |
+| Talk to type | Wispr Flow | Built, not checked |
+| Screen recording | CleanShot X, then Screen Studio | Step 5 built, not checked. No Screen Studio editor |
 
 The main idea: every capture (clip, screenshot, recording, GIF, dictated text,
 OCR text) goes to one place. It shows first as a corner card, then in one shared
@@ -31,7 +31,39 @@ It has three tabs:
 Build order: clipboard (done) → screenshots (steps 1–4) → talk to type →
 recording (step 5).
 
-**Next work: step 1, the capture core and the corner card.**
+**Step 1 (capture core and corner card) is built and checked** (area, window,
+fullscreen, Copy, Save, Show in Finder, drag, Close All, card shortcuts, Hide
+Desktop Icons). Not checked yet: the `⌥⇧⌘N` menu and a second display.
+
+**Steps 2–4 are built, not checked by Donovan yet:**
+- Step 2, markup editor (`Annotate/`): every tool in the plan, color picker
+  and screen color sampler, three line sizes, select/move/delete marks,
+  rotate, flip, resize, crop, undo/redo, drop an image in to combine, "Drag
+  me", Done updates the card and the history item. Marks stay editable in
+  `<id>.navi` (JSON + base PNG) beside the Inbox file.
+- Step 3 (`Extras/`): pin to screen (move, scroll to resize, opacity, lock so
+  clicks go through, unlock from the menu), Capture Text (OCR + QR, Vision),
+  self-timer, all-in-one bar on `⇧⌘5`, card quick actions (right-click).
+- Step 4: scrolling capture (`Scroll/`, Vision registration, vertical and
+  horizontal, Auto-scroll), background tool (`Background/`: gradients, solid,
+  picture, padding, corners, shadow, aspect ratio, auto balance, presets).
+
+**Talk to type and step 5 are built, not checked by Donovan yet:**
+- `Packages/NaviDictation`: hold fn to talk, double-tap fn to lock, pill with
+  a waveform, on-device speech (`SpeechAnalyzer`, fallback
+  `SFSpeechRecognizer`), cleanup with Foundation Models or rules, paste at the
+  cursor, then the old clipboard comes back. fn with another key (fn+⌫,
+  fn+arrows) never dictates. The first launch asks before it uses fn. When on,
+  Navi borrows the fn key setting (`AppleFnUsageType` = 0, "Do Nothing", applied
+  with `activateSettings -u`) while it runs and puts it back on quit.
+- `Packages/NaviRecording`: record bar, `SCStream` → MP4 (H.264/AAC), mic and
+  computer audio (mixed to one track), camera bubble, click and key overlays,
+  hide icons, mute notifications, red stop item in the menu bar, GIF, trim.
+  The app wires it to the capture overlay (`CaptureFeature.onRecordRequest`)
+  and to video cards (`CaptureFeature.videoTools`, `showRecording`).
+
+Not built: swipe to close a card, a Settings window, the Screen Studio-style
+video editor.
 
 ## Decisions
 
@@ -55,12 +87,43 @@ recording (step 5).
 - **Single window capture** uses `SCContentFilter(desktopIndependentWindow:)`,
   so nothing behind the window gets in.
 
-### Proposed defaults (confirm with Donovan before you build them)
+### Capture defaults
 
-- Navi takes over `⇧⌘3`, `⇧⌘4`, and `⇧⌘5`. The user turns off the macOS
-  shortcuts in System Settings first.
-- Captures save to `~/Pictures/Navi`.
-- Corner cards do not close on their own. Close with ✕ or a swipe.
+- Navi borrows `⇧⌘3` (fullscreen), `⇧⌘4` (area; Space for window), and `⇧⌘5`
+  (all-in-one bar) while it runs. `SystemScreenshotShortcuts` turns the macOS
+  ones off at launch (IDs 28, 30, 184 in `com.apple.symbolichotkeys`, then
+  `activateSettings -u`) and puts them back exactly as they were on quit. A
+  backup from an older run keeps its entries; new IDs are added to it. SIGTERM quits the normal way, so
+  `pkill` restores them too. No code runs when the app is deleted, so quitting
+  is what gives the keys back. The first launch asks; the menu has a toggle.
+- Other hotkeys: `⌥⇧⌘4` scrolling capture, `⌥⇧⌘T` capture text, `⌥⇧⌘5` record
+  (press again to stop).
+- Cards stay on the display where the capture was taken.
+- The history keeps a recording as MP4, with `<id>.preview.png` for its
+  thumbnail; paste from history pastes the file. Background clears the
+  `.navi` markup, so the next markup starts from the background image.
+- Recording cards show the duration, an MP4/GIF switch on hover, and Trim in
+  the bottom-left corner (`⌘E` on hover). Pin, markup, OCR, and background are
+  for images only.
+- Save puts files on the Desktop, as `Navi 2026-11-06 at 16.10.12.png`.
+  `CaptureSettings.saveFolder` changes it.
+- Copy and Save close the card, like CleanShot X. ⌥ + Copy keeps it open. Show
+  in Finder keeps it open.
+- While the mouse is on a card: `⌘C` copy, `⌘S` save, `⌘W` close. They are
+  Carbon hot keys that exist only during the hover, so other apps keep them.
+  `⌘E` annotate, `⌘P` pin. CleanShot X works the same way (shortcuts only
+  while the mouse is on the card). Card corners: Pin, Close, Annotate, Show in
+  Finder.
+- Card drag sends the file URL, so the drop keeps the `Navi … .png` name.
+- Corner cards do not close on their own (`autoCloseSeconds` = 0). Close with ✕,
+  or Close All Cards (menu, or right-click a card). Cards slide in with a small
+  bounce. A fullscreen capture shows the shot and closes it, so macOS plays the
+  same shrink as the area overlay. No shutter sound.
+- No Restore Closed Card. A closed shot stays in `⇧⌘V` history.
+- `⌥⇧⌘N` opens the Navi menu at the mouse. The same menu shows from the
+  menu bar icon. It is an AppKit `NSStatusItem` menu, built in `NaviMenu`.
+- Navi marks its own pasteboard writes with `NaviPasteboard.ownType`, so the
+  clipboard watcher does not add a capture twice.
 
 ## UX to copy
 
@@ -88,9 +151,13 @@ Xnapper's backgrounds, and macshot's auto-redact.
 | Path | Holds |
 |---|---|
 | `project.yml` | XcodeGen spec. The `.xcodeproj` is generated and gitignored |
-| `App/Sources/NaviApp.swift` | Menu bar icon, global hotkey, app wiring |
+| `App/Sources/NaviApp.swift` | Global hot keys, app wiring |
+| `App/Sources/NaviMenu.swift` | Menu bar icon and the Navi menu (`⌥⇧⌘N` opens it at the mouse) |
 | `Packages/NaviCore` | `Inbox` (shared history store), `CaptureItem`, `HotKey` (Carbon global hotkeys) |
 | `Packages/NaviClipboard` | Pasteboard watcher, Maccy-style panel, paste |
+| `Packages/NaviRecording` | Screen recording engine, record bar, camera bubble, overlays, GIF, trim |
+| `Packages/NaviDictation` | Talk to type: fn key, speech, cleanup, pill, paste |
+| `Packages/NaviCapture` | Selection overlay and all-in-one bar, ScreenCaptureKit capture, corner cards, `Annotate/`, `Extras/` (pin, OCR, toast), `Scroll/`, `Background/` |
 | `docs/capture-plan.html` | Prototype, feature map, and plan |
 
 `Inbox` keeps items in `~/Library/Application Support/Navi/` (`history.json`
@@ -105,11 +172,15 @@ xcodegen generate                       # after you change project.yml or add fi
 ~/.local/bin/heavy -- xcodebuild -project Navi.xcodeproj -scheme Navi \
   -configuration Debug -derivedDataPath build -quiet build
 cd Packages/NaviCore && swift test      # unit tests, run directly
+cd Packages/NaviCapture && swift test   # capture, markup, stitch, background tests
+cd Packages/NaviRecording && swift test # recording math, GIF, audio mixdown
+cd Packages/NaviDictation && swift test # cleanup rules, fn gestures, fn setting
 pkill -x Navi; open build/Build/Products/Debug/Navi.app
 ```
 
 Signing uses the Apple Development certificate, team `77SAW76597`, set in
-`project.yml`. Keep a stable signature so macOS keeps the Accessibility and
+`project.yml`. `App/Navi.entitlements` (generated from `project.yml`) holds the
+microphone and camera entitlements that the hardened runtime needs. Keep a stable signature so macOS keeps the Accessibility and
 Screen Recording permissions between builds.
 
 ## Rules

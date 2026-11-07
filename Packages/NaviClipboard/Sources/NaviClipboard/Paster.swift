@@ -8,7 +8,9 @@ enum Paster {
     /// Writes the item to the pasteboard. Returns the new pasteboard change count.
     static func write(_ item: CaptureItem, inbox: Inbox, to pasteboard: NSPasteboard) -> Int {
         pasteboard.clearContents()
-        if let url = inbox.fileURL(for: item), let image = NSImage(contentsOf: url) {
+        if item.kind == .recording, let url = inbox.fileURL(for: item) {
+            pasteboard.writeObjects([url as NSURL])
+        } else if let url = inbox.fileURL(for: item), let image = NSImage(contentsOf: url) {
             pasteboard.writeObjects([image])
         } else if let text = item.text {
             pasteboard.setString(text, forType: .string)
