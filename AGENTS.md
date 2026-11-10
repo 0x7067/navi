@@ -116,6 +116,8 @@ video editor.
   (press again to stop).
 - Shots leave out Navi's overlays, cards, pins, and pills (window layer above 0)
   but keep Navi's normal windows, such as the markup editor.
+- The selection overlay is a non-activating panel: it takes Esc, Space, and the
+  mouse without activating Navi, so an open markup editor is not raised.
 - The selection overlay shows at once over the live screen. The frozen screen
   images arrive about 0.2 s later and are what gets cropped; a selection that
   ends first waits for them.

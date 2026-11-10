@@ -199,7 +199,7 @@ public final class CaptureFeature {
         session.holdsSelection = modeBar
         session.canRecord = onRecordRequest != nil
         self.session = session
-        NSApp.activate()
+        // No NSApp.activate(): the overlay panels take the keys without raising Navi's other windows.
         session.begin()
         Task { [weak self, weak session] in
             guard let self else { return }

@@ -166,12 +166,16 @@ final class SelectionSession {
     }
 }
 
-final class OverlayWindow: NSWindow {
+/// A non-activating panel: it takes the keys (Esc, Space) and the mouse without bringing Navi to the
+/// front, so other Navi windows (an open markup editor) stay where they are.
+final class OverlayWindow: NSPanel {
     let overlayView: OverlayView
 
     init(screen: NSScreen, view: OverlayView) {
         overlayView = view
-        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        hidesOnDeactivate = false
+        becomesKeyOnlyIfNeeded = false
         setFrame(screen.frame, display: false)
         level = .screenSaver
         // Clear until the frozen image arrives, so the live screen shows through at once.
