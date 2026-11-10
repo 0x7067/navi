@@ -39,12 +39,20 @@ struct EditorSnapshotTests {
 
     /// Edit after capture over a 1440 × 900 screen. NAVI_BACKDROP may name a screenshot to use as
     /// the frozen screen; otherwise a plain gradient stands in for it.
-    @Test func editAfterCapture() throws {
+    /// Areas that put the toolbar below, above (near the bottom), and inside (whole screen).
+    static let areas: [String: CGRect] = [
+        "middle": CGRect(x: 420, y: 180, width: 560, height: 360),
+        "bottom": CGRect(x: 300, y: 480, width: 640, height: 400),
+        "full": CGRect(x: 0, y: 0, width: 1440, height: 900),
+    ]
+
+    @Test(arguments: ["middle", "bottom", "full"])
+    func editAfterCapture(place: String) throws {
         let folder = URL(filePath: ProcessInfo.processInfo.environment["NAVI_SNAPSHOTS"]!)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let screen = CGSize(width: 1440, height: 900)
         let backdrop = try Self.backdrop(size: CGSize(width: screen.width * 2, height: screen.height * 2))
-        let area = CGRect(x: 420, y: 180, width: 560, height: 360)
+        let area = try #require(Self.areas[place])
         let pixels = CGRect(x: area.minX * 2, y: area.minY * 2, width: area.width * 2, height: area.height * 2)
         let model = AnnotateModel(base: try #require(backdrop.cropping(to: pixels)), scale: 2)
         model.tool = .arrow
@@ -69,7 +77,7 @@ struct EditorSnapshotTests {
             let rep = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
             view.cacheDisplay(in: view.bounds, to: rep)
             let png = try #require(rep.representation(using: .png, properties: [:]))
-            try png.write(to: folder.appending(path: "edit-after-capture-\(name).png"))
+            try png.write(to: folder.appending(path: "edit-after-capture-\(place)-\(name).png"))
         }
     }
 
