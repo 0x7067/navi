@@ -37,6 +37,10 @@ public final class CaptureFeature {
     private let pins = PinBoard()
     private var session: SelectionSession?
     private var scrollSession: ScrollCaptureSession?
+    /// Edit after capture, while it is open.
+    private var inPlaceEditor: InPlaceAnnotator?
+    /// The frozen screens of the running selection. Edit after capture shows them behind the area.
+    private var frozenScreens: [(NSScreen, CapturedImage)] = []
     /// Open editor windows, kept alive until they close.
     private var editors: [UUID: AnyObject] = [:]
     private var isBusy = false
@@ -115,6 +119,7 @@ public final class CaptureFeature {
         }
         guard let screen = NSScreen.underMouse else {
             isBusy = false
+            copiesNextShot = false
             return
         }
         captureFullscreen(on: screen, timer: 0, sourceApp: NSWorkspace.shared.frontmostApplication)
@@ -205,7 +210,10 @@ public final class CaptureFeature {
             guard let self else { return }
             do {
                 let screens = try await ScreenGrabber.captureAllScreens(hideDesktopIcons: settings.hideDesktopIcons)
-                session?.freeze(screens)
+                // A selection cancelled before the freeze arrived must not keep the images.
+                guard let session else { return }
+                frozenScreens = screens
+                session.freeze(screens)
             } catch {
                 logger.error("Could not freeze the screen: \(error.localizedDescription)")
                 session?.finish(.cancelled)
@@ -217,6 +225,13 @@ public final class CaptureFeature {
         _ outcome: SelectionSession.Outcome, purpose: SelectionSession.Purpose, timer: Int, previousApp: NSRunningApplication?
     ) {
         session = nil
+        let frozen = frozenScreens
+        frozenScreens = []
+        if case let (.area(captured, screen, rect), .screenshot) = (outcome, purpose), timer == 0, settings.editAfterCapture {
+            let backdrop = frozen.first { $0.0 == screen }?.1.image
+            editInPlace(captured, backdrop: backdrop, on: screen, rect: rect, sourceApp: previousApp)
+            return
+        }
         previousApp?.activate()
         switch (outcome, purpose) {
         case (.cancelled, _):
@@ -300,6 +315,49 @@ public final class CaptureFeature {
         }
         scrollSession = scroll
         scroll.begin()
+    }
+
+    // MARK: Edit after capture
+
+    /// Keeps the capture busy until Return (copy) or Esc (cancel).
+    private func editInPlace(
+        _ captured: CapturedImage, backdrop: CGImage?, on screen: NSScreen, rect: CGRect, sourceApp: NSRunningApplication?
+    ) {
+        let editor = InPlaceAnnotator(captured: captured, backdrop: backdrop, screen: screen, area: rect) { [weak self] result in
+            guard let self else { return }
+            inPlaceEditor = nil
+            isBusy = false
+            sourceApp?.activate()
+            if let result {
+                deliverEdited(result, on: screen, sourceApp: sourceApp)
+            } else {
+                copiesNextShot = false
+            }
+        }
+        inPlaceEditor = editor
+        editor.show()
+    }
+
+    /// Copies the marked-up shot and adds it to the history, with its marks kept editable.
+    private func deliverEdited(_ result: AnnotateEditor.Result, on screen: NSScreen, sourceApp: NSRunningApplication?) {
+        copiesNextShot = false
+        let image = Self.image(result.flat, pointSize: result.pointSize)
+        NaviPasteboard.write(image: image)
+        Toast.show("Copied", on: screen)
+        guard let png = ImageOps.png(result.flat, pointSize: result.pointSize) else {
+            logger.error("Could not encode the edited capture as PNG")
+            return
+        }
+        let item = inbox.add(
+            fileData: png, fileExtension: "png", kind: .screenshot,
+            sourceApp: sourceApp?.localizedName, sourceBundleID: sourceApp?.bundleIdentifier, deduplicate: false
+        )
+        guard let id = item?.id else { return }
+        do {
+            try MarkupStore.save(base: result.base, document: result.document, to: inbox.markupURL(for: id))
+        } catch {
+            logger.error("Could not save the markup: \(error.localizedDescription)")
+        }
     }
 
     // MARK: Delivery

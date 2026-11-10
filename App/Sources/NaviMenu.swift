@@ -65,6 +65,9 @@ final class NaviMenu: NSObject, NSMenuDelegate {
         menu.addItem(item("Copy Screenshots to Clipboard", on: settings.copyToClipboard) {
             settings.copyToClipboard.toggle()
         })
+        menu.addItem(item("Edit Screenshots Before Copying", on: settings.editAfterCapture) {
+            settings.editAfterCapture.toggle()
+        })
         menu.addItem(item("Use Navi for Screenshot Keys", on: settings.useNaviScreenshotKeys == true) { [app] in
             app.setUseNaviScreenshotKeys(settings.useNaviScreenshotKeys != true)
         })

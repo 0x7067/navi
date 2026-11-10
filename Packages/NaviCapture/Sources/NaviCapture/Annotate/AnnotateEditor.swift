@@ -57,36 +57,13 @@ final class AnnotateEditor: NSObject, NSWindowDelegate {
         window?.close()
     }
 
-    /// ⌘Z undo, ⇧⌘Z redo, Delete for the selected mark, and one letter per tool (A arrow, T text…).
-    /// A local key monitor works even though Navi has no Edit menu. While text is being typed, the
-    /// text field keeps these keys, and Esc ends the typing instead of closing the editor.
+    /// Markup keys (`AnnotateKeys`) through a local key monitor, which works even though Navi has
+    /// no Edit menu.
     private func watchKeys() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            let windowNumber = event.windowNumber
-            let key = event.charactersIgnoringModifiers?.lowercased()
-            let code = event.keyCode
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                .subtracting([.function, .numericPad, .capsLock])
             let handled = MainActor.assumeIsolated { () -> Bool in
-                guard let self, let window = self.window, window.windowNumber == windowNumber else { return false }
-                // 53 is Escape.
-                if self.model.textEdit != nil {
-                    guard code == 53 else { return false }
-                    self.model.finishText()
-                    return true
-                }
-                if flags.isEmpty, let key, let tool = AnnotationTool.forShortcut(key) {
-                    self.model.tool = tool
-                    return true
-                }
-                if key == "z", flags == .command { self.model.undo(); return true }
-                if key == "z", flags == [.command, .shift] { self.model.redo(); return true }
-                // 51 is Delete (backspace), 117 is Forward Delete.
-                if code == 51 || code == 117, flags.isEmpty, self.model.selection != nil {
-                    self.model.deleteSelection()
-                    return true
-                }
-                return false
+                guard let self, let window = self.window, window.windowNumber == event.windowNumber else { return false }
+                return AnnotateKeys.handle(event, model: self.model)
             }
             return handled ? nil : event
         }
@@ -104,28 +81,41 @@ struct AnnotateView: View {
     @Bindable var model: AnnotateModel
     let onDone: () -> Void
     let onCancel: () -> Void
-    @FocusState private var isTyping: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            AnnotateToolbar(model: model, onDone: onDone, onCancel: onCancel)
+                .padding(.leading, 66) // room for the window buttons
+            Divider()
+            AnnotateCanvas(model: model, layout: .fitted)
+                .background(Color.black.opacity(0.2))
+        }
+        .frame(minWidth: 760, minHeight: 360)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+/// The markup tools, style, undo, and the Cancel and Done buttons. The editor window puts it
+/// above the canvas; edit after capture floats it beside the area on the frozen screen.
+struct AnnotateToolbar: View {
+    @Bindable var model: AnnotateModel
+    let onDone: () -> Void
+    let onCancel: () -> Void
+    var doneTitle = "Done"
+    /// ⌘Return in the window. Nil: no shortcut, because the owner handles Return itself (edit
+    /// after capture, where Return must end typing first).
+    var doneModifiers: EventModifiers? = .command
+    /// The small picture to drag into other apps. Off when a full-screen overlay covers them.
+    var showsDragThumbnail = true
 
     private static let drawingTools: [AnnotationTool] = [
         .select, .arrow, .rectangle, .filledRectangle, .ellipse, .line, .pencil, .highlighter, .text, .counter,
     ]
     private static let effectTools: [AnnotationTool] = [.blur, .pixelate, .spotlight, .crop]
 
-    var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Divider()
-            canvas
-        }
-        .frame(minWidth: 760, minHeight: 360)
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    // MARK: Toolbar
-
     /// One row when the window is wide enough. Otherwise two rows: tools on top, then style,
     /// undo, and the actions. Nothing squishes or hides.
-    private var toolbar: some View {
+    var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) {
                 toolGroups
@@ -160,7 +150,6 @@ struct AnnotateView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .padding(.leading, 66) // room for the window buttons
     }
 
     @ViewBuilder private var toolGroups: some View {
@@ -208,13 +197,18 @@ struct AnnotateView: View {
 
     private var actions: some View {
         HStack(spacing: 8) {
-            dragMe
+            if showsDragThumbnail { dragMe }
             Button("Cancel", action: onCancel)
                 .keyboardShortcut(.cancelAction)
                 .buttonStyle(.bordered)
-            Button("Done", action: onDone)
-                .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(.borderedProminent)
+            if let doneModifiers {
+                Button(doneTitle, action: onDone)
+                    .keyboardShortcut(.return, modifiers: doneModifiers)
+                    .buttonStyle(.borderedProminent)
+            } else {
+                Button(doneTitle, action: onDone)
+                    .buttonStyle(.borderedProminent)
+            }
         }
         .fixedSize()
     }
@@ -264,140 +258,6 @@ struct AnnotateView: View {
                 model.color = RGBA(red: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent)
             }
         )
-    }
-
-    // MARK: Canvas
-
-    private var canvas: some View {
-        GeometryReader { proxy in
-            let pixels = model.pixelSize
-            let fit = min(1 / model.scale, (proxy.size.width - 40) / pixels.width, (proxy.size.height - 40) / pixels.height)
-            let shown = CGSize(width: pixels.width * fit, height: pixels.height * fit)
-            ZStack(alignment: .topLeading) {
-                ZStack(alignment: .topLeading) {
-                    if let image = model.rendered {
-                        Image(decorative: image, scale: 1)
-                            .resizable()
-                            .interpolation(.high)
-                            .frame(width: shown.width, height: shown.height)
-                            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
-                    }
-                    if let mark = model.selectedMark, model.cropRect == nil {
-                        SelectionOverlay(mark: mark, fit: fit)
-                    }
-                    if let crop = model.cropRect {
-                        cropOverlay(crop, fit: fit, shown: shown)
-                    }
-                }
-                .frame(width: shown.width, height: shown.height, alignment: .topLeading)
-                .contentShape(Rectangle())
-                .gesture(drawGesture(fit: fit))
-                .onContinuousHover { phase in
-                    switch phase {
-                    case let .active(location): model.cursor(at: pixel(location, fit: fit)).set()
-                    case .ended: NSCursor.arrow.set()
-                    }
-                }
-                .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
-                    loadDroppedImage(providers)
-                    return true
-                }
-                // The text box sits above the drawing gesture, so clicks and typing go to the box.
-                if let edit = model.textEdit {
-                    textField(fit: fit)
-                        .task(id: "\(edit.point.x),\(edit.point.y)") { isTyping = true }
-                }
-            }
-            .frame(width: shown.width, height: shown.height, alignment: .topLeading)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .background(Color.black.opacity(0.2))
-    }
-
-    private func drawGesture(fit: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                let start = pixel(value.startLocation, fit: fit)
-                let point = pixel(value.location, fit: fit)
-                if value.translation == .zero {
-                    model.pointerDown(at: start)
-                } else {
-                    model.pointerDragged(from: start, to: point)
-                }
-            }
-            .onEnded { value in
-                model.pointerUp(from: pixel(value.startLocation, fit: fit), to: pixel(value.location, fit: fit))
-            }
-    }
-
-    private func pixel(_ point: CGPoint, fit: CGFloat) -> CGPoint {
-        CGPoint(x: point.x / fit, y: point.y / fit)
-    }
-
-    private func cropOverlay(_ crop: CGRect, fit: CGFloat, shown: CGSize) -> some View {
-        let rect = CGRect(x: crop.minX * fit, y: crop.minY * fit, width: crop.width * fit, height: crop.height * fit)
-        return ZStack(alignment: .topLeading) {
-            Path { path in
-                path.addRect(CGRect(origin: .zero, size: shown))
-                path.addRect(rect)
-            }
-            .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
-            .allowsHitTesting(false)
-            Rectangle()
-                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                .foregroundStyle(.white)
-                .frame(width: rect.width, height: rect.height)
-                .offset(x: rect.minX, y: rect.minY)
-                .allowsHitTesting(false)
-            HStack(spacing: 6) {
-                Button("Cancel", action: model.cancelCrop)
-                Button("Crop", action: model.applyCrop)
-                    .keyboardShortcut(.return, modifiers: [])
-                    .buttonStyle(.borderedProminent)
-            }
-            .controlSize(.small)
-            .offset(x: rect.minX, y: min(rect.maxY + 6, shown.height - 26))
-        }
-    }
-
-    /// The typing box. Its own text is invisible: the canvas draws the typed text with the same
-    /// renderer as finished text, so nothing changes (font, outline, place) when the box closes.
-    /// The field only supplies the caret, keys, and the outline.
-    private func textField(fit: CGFloat) -> some View {
-        let point = model.textEdit?.point ?? .zero
-        let fontSize = model.textEditFontSize * fit
-        let color = Color(.sRGB, red: model.color.red, green: model.color.green, blue: model.color.blue)
-        return TextField("", text: Binding(
-            get: { model.textEdit?.text ?? "" },
-            set: { model.textEdit?.text = $0 }
-        ), axis: .vertical)
-            .textFieldStyle(.plain)
-            .focused($isTyping)
-            .font(.system(size: fontSize, weight: .bold))
-            .foregroundStyle(.clear)
-            .tint(color)
-            .frame(minWidth: 120, maxWidth: 400, alignment: .leading)
-            // The outline sits outside the text, so the text starts exactly at the mark's point.
-            .background(RoundedRectangle(cornerRadius: 3).stroke(Color.accentColor, lineWidth: 1).padding(-3))
-            .offset(x: point.x * fit, y: point.y * fit)
-            .onSubmit(model.finishText)
-    }
-
-    private func loadDroppedImage(_ providers: [NSItemProvider]) {
-        for provider in providers {
-            if provider.canLoadObject(ofClass: NSURL.self) {
-                _ = provider.loadObject(ofClass: NSURL.self) { url, _ in
-                    guard let url = url as? URL else { return }
-                    Task { @MainActor in
-                        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                              let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
-                        else { return }
-                        model.addImage(image)
-                    }
-                }
-                return
-            }
-        }
     }
 }
 
@@ -520,56 +380,6 @@ private struct ColorWell: View {
         }
         .padding(12)
         .frame(width: 152)
-    }
-}
-
-/// The selected mark's dashed outline and handles, drawn at screen size so they stay easy
-/// to see and grab at any zoom.
-private struct SelectionOverlay: View {
-    let mark: Annotation
-    let fit: CGFloat
-
-    var body: some View {
-        let lineGap = mark.isBox ? CGFloat(mark.lineWidth) / 2 * fit + 3 : 6
-        let outline = (mark.isBox ? mark.box : mark.bounds)
-            .applying(CGAffineTransform(scaleX: fit, y: fit))
-            .insetBy(dx: -lineGap, dy: -lineGap)
-        ZStack(alignment: .topLeading) {
-            if mark.kind != .arrow, mark.kind != .line {
-                Rectangle()
-                    .stroke(Color.white.opacity(0.9), lineWidth: 1)
-                    .frame(width: outline.width, height: outline.height)
-                    .offset(x: outline.minX, y: outline.minY)
-                Rectangle()
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    .frame(width: outline.width, height: outline.height)
-                    .offset(x: outline.minX, y: outline.minY)
-            }
-            ForEach(mark.handles, id: \.self) { handle in
-                let point = handlePoint(handle, outline: outline)
-                let size: CGFloat = handle.isEdge ? 7 : 9
-                Circle()
-                    .fill(.white)
-                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))
-                    .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
-                    .frame(width: size, height: size)
-                    .offset(x: point.x - size / 2, y: point.y - size / 2)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    /// Box handles sit on the dashed outline. Line and arrow handles sit on the ends.
-    private func handlePoint(_ handle: Annotation.Handle, outline: CGRect) -> CGPoint {
-        guard mark.isBox else {
-            let point = mark.point(of: handle)
-            return CGPoint(x: point.x * fit, y: point.y * fit)
-        }
-        let mark = mark.point(of: handle)
-        let box = self.mark.box
-        let x = mark.x < box.midX - 0.5 ? outline.minX : (mark.x > box.midX + 0.5 ? outline.maxX : outline.midX)
-        let y = mark.y < box.midY - 0.5 ? outline.minY : (mark.y > box.midY + 0.5 ? outline.maxY : outline.midY)
-        return CGPoint(x: x, y: y)
     }
 }
 

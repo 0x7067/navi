@@ -128,6 +128,17 @@ video editor.
   for images only.
 - Save puts files on the Desktop, as `Navi 2026-11-06 at 16.10.12.png`.
   `CaptureSettings.saveFolder` changes it.
+- Edit after capture (`CaptureSettings.editAfterCapture`, off by default; menu
+  toggle "Edit Screenshots Before Copying"): after an area shot (`⇧⌘4`, or
+  Capture in the `⇧⌘5` bar, no timer), the frozen screen stays dimmed and the
+  area becomes the markup canvas in place (`Annotate/InPlaceAnnotator.swift`),
+  with the toolbar floating below it (above it near the bottom, inside it when
+  it fills the screen). No window or title bar. Return or Copy copies the
+  marked-up shot, adds it to the history with its marks, and shows "Copied";
+  no corner card. Esc or Cancel drops the shot. While typing text or cropping,
+  Return and Esc end that first. Every editor key (tool letters, `⌘Z`, Delete)
+  works. The window editor and this one share `AnnotateToolbar`,
+  `AnnotateCanvas`, and `AnnotateKeys`.
 - Every screenshot goes to the clipboard as soon as it is taken, and again after
   markup Done (`CaptureSettings.copyToClipboard`, on by default; menu toggle
   "Copy Screenshots to Clipboard").
@@ -208,7 +219,7 @@ xcodegen generate                       # after you change project.yml or add fi
   -configuration Debug -derivedDataPath build -quiet build
 cd Packages/NaviCore && swift test      # unit tests, run directly
 cd Packages/NaviCapture && swift test   # capture, markup, stitch, background tests
-NAVI_SNAPSHOTS=/tmp/navi-snaps swift test --filter EditorSnapshot  # in NaviCapture: draws the markup editor to PNGs (760/1000/1400 wide, dark and light) to check its look
+NAVI_SNAPSHOTS=/tmp/navi-snaps swift test --filter EditorSnapshot  # in NaviCapture: draws the markup editor to PNGs (760/1000/1400 wide, dark and light) and edit after capture (1440 × 900; NAVI_BACKDROP=<png> for a real screen behind it) to check their look
 cd Packages/NaviRecording && swift test # recording math, GIF, audio mixdown
 cd Packages/NaviDictation && swift test # cleanup rules, fn gestures, fn setting, scoring
 cd Packages/NaviDictation && swift run dictation-bench [--audio [--speech apple,parakeet]] [--failures] [--save]
