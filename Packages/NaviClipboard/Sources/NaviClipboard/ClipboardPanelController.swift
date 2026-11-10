@@ -32,6 +32,7 @@ final class ClipboardPanelController {
     var isVisible: Bool { panel?.isVisible ?? false }
 
     func show() {
+        let interval = HistorySignpost.signposter.beginInterval("PanelShow")
         let panel = panel ?? makePanel()
         self.panel = panel
 
@@ -58,6 +59,7 @@ final class ClipboardPanelController {
         applyHeight()
         observeHeight()
         panel.makeKeyAndOrderFront(nil)
+        HistorySignpost.signposter.endInterval("PanelShow", interval)
         panel.invalidateShadow()
         installKeyMonitor()
         schedulePreview()
