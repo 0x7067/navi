@@ -121,6 +121,17 @@ video editor.
   for images only.
 - Save puts files on the Desktop, as `Navi 2026-11-06 at 16.10.12.png`.
   `CaptureSettings.saveFolder` changes it.
+- Every screenshot goes to the clipboard as soon as it is taken, and again after
+  markup Done (`CaptureSettings.copyToClipboard`, on by default; menu toggle
+  "Copy Screenshots to Clipboard").
+- Each capture is its own history item, even when its pixels match an older
+  shot (`Inbox.add(fileData:…, deduplicate: false)`). Saved markup opens only
+  while the history file is still that markup's flat image.
+- Markup editor keys: V select, A arrow, R rectangle, F filled rectangle,
+  O ellipse, L line, P pencil, H highlighter, T text, N counter, B blur,
+  X pixelate, S spotlight, C crop. Text: the box takes focus at once; a click
+  outside keeps the text and selects it; drag text with the text or select
+  tool; click selected text to edit it; Esc ends typing.
 - Copy and Save close the card, like CleanShot X. ⌥ + Copy keeps it open. Show
   in Finder keeps it open.
 - While the mouse is on a card: `⌘C` copy, `⌘S` save, `⌘W` close. They are

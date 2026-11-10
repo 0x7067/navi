@@ -67,6 +67,8 @@ final class AnnotateModel {
     @ObservationIgnored private var resizing: Annotation.Handle?
     /// True while the pickers copy the selected mark's style, so that copy does not change the mark.
     @ObservationIgnored private var isSyncingStyle = false
+    /// A text mark that was already selected when the pointer went down. A click without a drag edits it.
+    @ObservationIgnored private var clickedSelectedText: UUID?
 
     var canUndo: Bool { undoStack.canUndo }
     var canRedo: Bool { undoStack.canRedo }
@@ -83,6 +85,15 @@ final class AnnotateModel {
     // MARK: Pointer input, in image pixels
 
     func pointerDown(at point: CGPoint) {
+        clickedSelectedText = nil
+        // A click outside the text box ends typing. Like other marks, the new text is then selected
+        // with the pointer tool, so it can be dragged at once. The click does nothing else.
+        if let edit = textEdit, edit.id != nil || !edit.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           document.hit(point, tolerance: 4 * scale)?.kind != .text {
+            finishText()
+            render()
+            return
+        }
         commitText()
         // A handle on the selected mark resizes it, whatever the tool.
         if let selected = selectedMark, let handle = selected.handle(at: point, tolerance: 10 * scale) {
@@ -95,6 +106,7 @@ final class AnnotateModel {
         switch tool {
         case .select:
             if let hit = document.hit(point, tolerance: 6 * scale) {
+                if hit.kind == .text, hit.id == selection { clickedSelectedText = hit.id }
                 selection = hit.id
                 dragOrigin = hit
                 recordUndo()
@@ -103,7 +115,14 @@ final class AnnotateModel {
             }
         case .crop:
             cropRect = CGRect(origin: point, size: .zero)
-        case .text, .counter:
+        case .text:
+            // Press on a text mark to drag it. A click without a drag edits it (see `pointerUp`).
+            if let hit = document.hit(point, tolerance: 4 * scale), hit.kind == .text {
+                selection = hit.id
+                dragOrigin = hit
+                recordUndo()
+            }
+        case .counter:
             break
         default:
             guard let kind = Annotation.Kind(rawValue: tool.rawValue) else { return }
@@ -123,7 +142,7 @@ final class AnnotateModel {
             return
         }
         switch tool {
-        case .select:
+        case .select, .text:
             guard let origin = dragOrigin, let index = document.annotations.firstIndex(where: { $0.id == origin.id }) else { return }
             document.annotations[index] = origin.moved(by: CGVector(dx: point.x - start.x, dy: point.y - start.y))
         case .crop:
@@ -146,11 +165,22 @@ final class AnnotateModel {
         switch tool {
         case .select:
             dragOrigin = nil
+            if !moved, let id = clickedSelectedText, let mark = document.annotations.first(where: { $0.id == id }) {
+                textEdit = TextEdit(point: mark.start, text: mark.text ?? "", id: id)
+            }
+            clickedSelectedText = nil
         case .crop:
             if !moved { cropRect = nil }
         case .text:
-            if let hit = document.hit(point, tolerance: 4 * scale), hit.kind == .text {
-                textEdit = TextEdit(point: hit.start, text: hit.text ?? "", id: hit.id)
+            if let origin = dragOrigin {
+                dragOrigin = nil
+                if moved {
+                    // Dragged a text mark: keep it selected with the pointer tool.
+                    tool = .select
+                    selection = origin.id
+                } else if let mark = document.annotations.first(where: { $0.id == origin.id }) {
+                    textEdit = TextEdit(point: mark.start, text: mark.text ?? "", id: mark.id)
+                }
             } else {
                 textEdit = TextEdit(point: point, text: "")
             }
