@@ -8,8 +8,11 @@ struct ScenarioResult: Codable {
     let minMs: Double
     /// Items the scenario returned on its last run. Nil where that does not apply.
     let matches: Int?
+    /// Items the last run left out of a cold search because their keys were not built in time. Nil elsewhere.
+    let deferred: Int?
 
-    init(name: String, milliseconds: [Double], matches: Int? = nil) {
+    init(name: String, milliseconds: [Double], matches: Int? = nil, deferred: Int? = nil) {
+        self.deferred = deferred
         let sorted = milliseconds.sorted()
         self.name = name
         medianMs = Statistics.median(sorted)
@@ -38,6 +41,7 @@ struct BenchReport: Codable {
     let commit: String
     let machine: Machine
     let seed: UInt64
+    let corpus: String
     let iterations: Int
     let sizes: [SizeResult]
 
@@ -62,26 +66,26 @@ struct BenchReport: Codable {
     /// A fixed-width table, one block per size.
     func table() -> String {
         var lines = [
-            "History benchmark · commit \(commit) · \(machine.cpu) · macOS \(machine.macOS) · seed \(seed) · \(iterations) runs",
+            "History benchmark · commit \(commit) · \(machine.cpu) · macOS \(machine.macOS) · seed \(seed) · corpus \(corpus) · \(iterations) runs",
         ]
         for size in sizes {
             lines.append("")
             lines.append("\(size.items) items · history.json \(String(format: "%.0f", size.historyKB)) KB")
-            lines.append(Self.row("scenario", "median ms", "p95 ms", "min ms", "matches", left: true))
+            lines.append(Self.row("scenario", "median ms", "p95 ms", "min ms", "matches", "deferred", left: true))
             for scenario in size.scenarios {
                 lines.append(Self.row(
                     scenario.name,
                     Self.ms(scenario.medianMs), Self.ms(scenario.p95Ms), Self.ms(scenario.minMs),
-                    scenario.matches.map(String.init) ?? "-"
+                    scenario.matches.map(String.init) ?? "-", scenario.deferred.map(String.init) ?? "-"
                 ))
             }
         }
         return lines.joined(separator: "\n")
     }
 
-    private static func row(_ name: String, _ median: String, _ p95: String, _ minimum: String, _ matches: String, left: Bool = false) -> String {
+    private static func row(_ name: String, _ median: String, _ p95: String, _ minimum: String, _ matches: String, _ deferred: String, left: Bool = false) -> String {
         [
-            pad(name, 16, alignRight: !left), pad(median, 11), pad(p95, 11), pad(minimum, 11), pad(matches, 9),
+            pad(name, 16, alignRight: !left), pad(median, 11), pad(p95, 11), pad(minimum, 11), pad(matches, 9), pad(deferred, 10),
         ].joined()
     }
 

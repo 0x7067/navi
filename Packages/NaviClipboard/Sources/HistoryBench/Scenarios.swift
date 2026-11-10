@@ -15,6 +15,7 @@ func runBench(_ options: BenchOptions, packageRoot: URL) throws -> BenchReport {
             macOS: ProcessInfo.processInfo.operatingSystemVersionString
         ),
         seed: options.seed,
+        corpus: options.corpus.rawValue,
         iterations: options.iterations,
         sizes: sizes
     )
@@ -27,7 +28,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
         path: "history-bench-\(count)-\(UUID().uuidString)", directoryHint: .isDirectory
     )
     defer { try? FileManager.default.removeItem(at: directory) }
-    try HistorySeeder.write(count: count, seed: options.seed, to: directory)
+    try HistorySeeder.write(count: count, seed: options.seed, corpus: options.corpus, to: directory)
     let bytes = try fileSize(directory.appending(path: "history.json"))
     // Above `count`, so `add` never evicts a seeded item.
     let limit = count + 100
@@ -61,13 +62,50 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     if let id = added { inbox.remove(id) }
     scenarios.append(ScenarioResult(name: "add", milliseconds: add.milliseconds))
 
-    for (name, query) in [("search-common", "the"), ("search-rare", "quartz"), ("search-none", "zzqxv")] {
+    // A pasted 2 MB text in other scripts. Its search key is built in the background, not inside `add`.
+    let large = String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000)
+    var addedLarge: UUID?
+    var largeCounter = 0
+    let addLarge = sample(runs, prepare: {
+        if let id = addedLarge {
+            inbox.remove(id)
+            addedLarge = nil
+        }
+    }, run: { _ in
+        largeCounter += 1
+        addedLarge = inbox.add(text: "bench large \(largeCounter) " + large)?.id
+        return 1
+    })
+    if let id = addedLarge { inbox.remove(id) }
+    scenarios.append(ScenarioResult(name: "add-large-mixed", milliseconds: addLarge.milliseconds))
+
+    let queries = SearchQueries(options.corpus)
+    for (name, query) in queries.warm {
         let result = sample(runs, prepare: { () }, run: { _ in inbox.search(query).count })
         scenarios.append(ScenarioResult(name: name, milliseconds: result.milliseconds, matches: result.count))
     }
+    // A fresh inbox has no search keys yet. Only the main-actor work of the first search is timed; the background
+    // key build runs beside it, and its install waits for the main actor, which this loop never yields.
+    for (name, query) in queries.cold {
+        var deferred = 0
+        let cold = sample(runs, prepare: { Inbox(directory: directory, limit: limit) }, run: { fresh in
+            let found = fresh.search(query).count
+            deferred = fresh.deferredSearchItems
+            return found
+        })
+        scenarios.append(ScenarioResult(
+            name: name, milliseconds: cold.milliseconds, matches: cold.count, deferred: deferred
+        ))
+    }
+    // Time from the end of `Inbox.init` until the background build has installed every key.
+    let warmup = sample(runs, prepare: { Inbox(directory: directory, limit: limit) }, run: { fresh in
+        while !fresh.isSearchReady { RunLoop.main.run(mode: .default, before: .now + 0.0005) }
+        return 1
+    })
+    scenarios.append(ScenarioResult(name: "search-warmup", milliseconds: warmup.milliseconds))
 
     let model = ClipboardModel(inbox: inbox)
-    model.query = "the"
+    model.query = queries.results
     let results = sample(runs, prepare: { () }, run: { _ in model.results.count })
     scenarios.append(ScenarioResult(name: "results", milliseconds: results.milliseconds, matches: results.count))
 
@@ -136,4 +174,48 @@ private func millis(_ duration: Duration) -> Double {
 
 private func fileSize(_ url: URL) throws -> Int {
     try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int ?? 0
+}
+
+/// The queries each corpus times, as (scenario name, query).
+private struct SearchQueries {
+    let warm: [(String, String)]
+    let cold: [(String, String)]
+    /// The query for the `results` scenario.
+    let results: String
+
+    init(_ corpus: Corpus) {
+        switch corpus {
+        case .ascii:
+            warm = [
+                ("search-common", "the"), ("search-rare", "quartz"), ("search-none", "zzqxv"),
+                ("search-accent-on-ascii", "ação"),
+            ]
+            cold = [("search-cold", "the")]
+            results = "the"
+        case .pt:
+            warm = [
+                ("search-pt-common", "de"), ("search-pt-rare", "quartzo"), ("search-pt-none", "zzqxv"),
+                ("search-pt-accent", "ação"), ("search-pt-accent2", "Reunião"),
+                ("search-pt-digit", "9999"), ("search-pt-digit2", "v2"),
+                ("search-pt-mixed", "テキスト"), ("search-pt-emoji", "😀"),
+            ]
+            cold = [
+                ("search-pt-cold-rare", "quartzo"), ("search-pt-cold-accent", "ação"),
+                ("search-pt-cold-digit", "9999"), ("search-pt-cold-mixed", "テキスト"),
+            ]
+            results = "de"
+        case .mixed:
+            warm = [
+                ("search-mixed-cyrillic", "привет"), ("search-mixed-japanese", "テキスト"),
+                ("search-mixed-arabic", "مرحبا"), ("search-mixed-hindi", "नमस्ते"), ("search-mixed-emoji", "😀"),
+                ("search-mixed-none", "zzqxv"),
+            ]
+            cold = [
+                ("search-mixed-cold-cyrillic", "привет"), ("search-mixed-cold-japanese", "テキスト"),
+                ("search-mixed-cold-arabic", "مرحبا"), ("search-mixed-cold-hindi", "नमस्ते"),
+                ("search-mixed-cold-emoji", "😀"),
+            ]
+            results = "привет"
+        }
+    }
 }

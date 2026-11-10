@@ -15,6 +15,7 @@ cd Packages/NaviClipboard && swift run -c release history-bench --save
 | `--sizes 200,1000,5000` | 200,1000,5000 | History sizes to seed and time |
 | `--iterations N` | 20 | Timed runs per scenario at 1,000 items and up, after three discarded warm-up runs. Smaller sizes get more, see below |
 | `--seed N` | 42 | Seed for the synthetic history. The same seed gives the same content |
+| `--corpus ascii\|pt\|mixed` | ascii | Language of the seeded text. `pt` uses Portuguese words and about 60% of text items contain accented words (ã õ ç é ê á í ó ú à), and 25% end with mixed scripts, emoji, symbols and numbers. `mixed` seeds Cyrillic, Japanese, Arabic, Hindi and emoji items, one script per item |
 | `--json` | off | Print the report as JSON instead of a table |
 | `--save` | off | Write `Bench/results/<date>-<commit>.json` (date to the second, commit = short HEAD when run) |
 
@@ -36,9 +37,19 @@ Each size gets a fresh temporary directory, deleted at the end. The bench writes
 |---|---|
 | `load` | `Inbox(directory:limit:)`: reads and decodes `history.json`, then sorts |
 | `add` | `Inbox.add(text:)` on a full inbox, including the save of the whole file. The added item is removed outside the timer |
+| `add-large-mixed` | `Inbox.add(text:)` of a 2 MB Cyrillic, Japanese and emoji text on a full inbox, including the save. Its search key is built in the background, so it is not in this time; the time is the whole-file save, as in `add` |
 | `search-common` | `Inbox.search("the")`, which matches most text items |
 | `search-rare` | `Inbox.search("quartz")`, which matches about 7% of text items |
 | `search-none` | `Inbox.search("zzqxv")`, which matches nothing |
+| `search-accent-on-ascii` | `Inbox.search("ação")` on the ASCII corpus |
+| `search-cold`, `search-warmup` | The first search on a fresh inbox, and the background key build; see Search below |
+| `search-pt-common`, `-rare`, `-none` | With `--corpus pt`: `search("de")`, `("quartzo")` and `("zzqxv")` |
+| `search-pt-accent`, `-accent2` | With `--corpus pt`: `search("ação")` and `("Reunião")` |
+| `search-pt-digit`, `-digit2` | With `--corpus pt`: `search("9999")` and `("v2")` |
+| `search-pt-mixed`, `-emoji` | With `--corpus pt`: `search("テキスト")` and `("😀")`. A quarter of the items end with Japanese, Cyrillic, emoji with a skin tone, `nº` and `€10` |
+| `search-pt-cold-rare`, `-cold-accent`, `-cold-digit`, `-cold-mixed` | With `--corpus pt`: the first search on a fresh inbox, for `quartzo`, `ação`, `9999` and `テキスト` |
+| `search-mixed-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji`, `-none` | With `--corpus mixed`: a word in each script, `😀`, and `zzqxv` |
+| `search-mixed-cold-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji` | With `--corpus mixed`: the first search on a fresh inbox. The `deferred` column is how many items it left out |
 | `results` | `ClipboardModel.results` with the query `the`: the search plus model overhead |
 | `thumbnail-open` | `ClipboardModel.image(for:)` on an image item. A new model per run, so the cache is always empty. `NSImage` reads the file lazily, so this covers reading the file and creating the image. The pixel decode is not included |
 | `thumbnail-draw` | `ClipboardModel.image(for:)` on an uncached image item, then a draw into a 2× bitmap of the row frame (200×40 points, aspect fit, as `ClipboardListView` shows it). The draw forces the pixel decode that a row pays on first paint |
@@ -129,3 +140,57 @@ Spread is run 2 against run 1, on the median. The target is within 15% for every
 - 1,000 items: every scenario but one is within 6%. `thumbnail-draw` moved 18.7% (11.0 ms to 9.0 ms), which misses the target. Two more runs at 1,000 items, not saved, gave 9.76 ms and 9.76 ms, so run 1 looks like an outlier: its p95 was 28.9 ms against 9.1 ms in run 2. The cause is not established. Compare `thumbnail-draw` changes with a fresh pair of runs before trusting a difference under 20%.
 
 No scenario has a median under 0.1 ms, so none is below timer resolution.
+
+## Search
+
+Search ignores case, accents and character width, the same in every locale, and one rule covers every query: `acao` finds `ação`, `CAFE` finds `café`, `strasse` finds `Straße`, fullwidth `ＡＢＣ` finds `abc`. It matches the text and the source app name, in display order. This replaces the earlier `localizedCaseInsensitiveContains` filter, which kept accents and treated some queries differently (digits, accents in mixed normalization forms), and which scanned every item on every call.
+
+How it works (`SearchCache`, `SearchFold`):
+
+- Each item has a key for its text and for its source app: the bytes of `string.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)`. A search folds the query the same way and looks for the bytes with `memmem`.
+- The key is built without calling the system fold for every text. ASCII is lowercased eight bytes at a time. Characters from U+0080 to U+02FF come from a table. Others come from a cache filled by the system fold, one character (with the marks after it) at a time. A text with a character whose fold depends on its neighbors (CJK compatibility ideographs, emoji skin tones, some spaces and marks above U+036F) has the system fold applied only to the stretch around it, between two ASCII-adjacent spaces. Every item gets a key; nothing falls back to a scan.
+- The fold equals the system fold byte for byte. `InboxSearchTests` checks it on 20,000 random texts and every BMP scalar. A one-off check of about 21 million random texts and 10 million scalar cases found no difference.
+- Keys for a new item up to 16 KB are built when it is added (under 1 ms even for non-Latin text). A bigger text is handed to the background builder, and a search before its key lands builds it within the 6 ms budget. After `Inbox.init`, a background task builds the keys of the loaded items, 500 at a time, and installs each batch on the main actor.
+- Until the keys exist, a search builds missing ones itself, but only for `Inbox.searchBudget` (6 ms, on a monotonic clock). Items still without a key when that runs out are left out of that search and counted in `Inbox.deferredSearchItems`; they are never dropped for good. Each installed batch changes `Inbox.searchKeysVersion`, which `search` reads, so `ClipboardModel.results` and the list that shows it recompute by themselves and the results fill in. In practice that is a few milliseconds for Latin text and about 0.2 s for 5,000 Arabic, Hindi or Japanese items, only for the first search after launch.
+- The system-fold caches are bounded: the scalar cache clears at 16,384 entries, the cluster cache at 2,048, and clusters over 64 bytes are not cached, so stacks of combining marks cannot grow them.
+
+What the new search no longer matches that the old one did, from a one-off check of 1.5 million random query and text pairs in en_US, pt_BR and de_DE (0.06% of pairs with realistic characters, 0.5% with the exotic ones): compatibility forms of digits (`1` finding `¹` or `①`, `２` finding `²`), `ß` finding a single `s`, composed Hangul or kana (`가` finding `ᄀ`+`ᅡ`, `ガ` finding `カ` + voicing mark) when the other form has the pieces, and queries that are only combining marks, zero-width characters or Devanagari/Arabic marks. Plain Portuguese, English and accented text lost nothing. It matches more: for example `Reuniao` finds `Reunião`, and accents are ignored when the query has a digit.
+
+| Scenario | What it times |
+|---|---|
+| `search-cold` | A fresh `Inbox` from disk, then the first search at once. Only main-actor work is timed; the background build runs beside it |
+| `search-warmup` | From the end of `Inbox.init` until the background build has installed every key |
+
+Median and p95 in ms at 5,000 items. Before is the original filter (ASCII baseline above, run 2). After is `2026-11-11T02.02.03-6ebe147.json` (default corpus, second run; the first, `02.01.55`, is within 4% on every median), `2026-11-11T02.02.14-6ebe147.json` (`--corpus pt`) and `2026-11-11T02.02.48-6ebe147.json` (`--corpus mixed`). The previous version of this change had `search-pt-rare` at about 47 ms, `search-pt-none` at 49, `search-pt-accent` at 25 and `search-pt-accent2` at 36 on a similar Portuguese history; those were review measurements, not saved.
+
+| Scenario | Before median | Before p95 | After median | After p95 | Deferred |
+|---|---:|---:|---:|---:|---:|
+| search-common | 8.683 | 9.067 | 1.426 | 1.443 | |
+| search-rare | 33.277 | 33.600 | 3.729 | 3.751 | |
+| search-none | 34.271 | 34.624 | 3.885 | 3.947 | |
+| search-accent-on-ascii | | | 6.404 | 6.437 | |
+| results | 8.427 | 8.809 | 1.457 | 1.556 | |
+| search-cold | n/a | n/a | 3.983 | 4.354 | 0 |
+| search-warmup (background) | n/a | n/a | 4.683 | 4.894 | |
+| search-pt-common | | | 0.940 | 0.954 | |
+| search-pt-rare | | | 4.317 | 4.360 | |
+| search-pt-none | | | 4.147 | 4.187 | |
+| search-pt-accent | | | 4.252 | 4.366 | |
+| search-pt-digit2 | | | 5.211 | 5.237 | |
+| search-pt-mixed | | | 3.932 | 4.107 | |
+| search-pt-cold-rare | | | 6.094 | 6.098 | 2597 |
+| search-pt-cold-accent | | | 6.113 | 6.132 | 2607 |
+| search-pt-cold-digit | | | 6.104 | 6.172 | 2618 |
+| search-pt-cold-mixed | | | 6.107 | 6.144 | 2677 |
+| search-warmup, pt (background) | | | 10.130 | 10.785 | |
+| search-mixed-cyrillic | | | 6.178 | 6.241 | |
+| search-mixed-none | | | 7.646 | 7.681 | |
+| results, mixed corpus | | | 9.676 | 9.994 | |
+| search-mixed-cold-cyrillic | | | 6.250 | 6.316 | 4906 |
+| search-mixed-cold-japanese | | | 6.247 | 6.475 | 4914 |
+| search-mixed-cold-arabic | | | 6.255 | 6.450 | 4916 |
+| search-mixed-cold-hindi | | | 6.251 | 6.612 | 4916 |
+| search-mixed-cold-emoji | | | 6.232 | 6.481 | 4924 |
+| search-warmup, mixed (background) | | | 223.717 | 225.496 | |
+
+Every search scenario, cold included, is under 16.6 ms at p95 at 200, 1,000 and 5,000 items on all three corpora; the worst is 10 ms (`results` on the mixed corpus, a warm `memmem` over 22 MB of keys). The cold searches stay near the 6 ms budget whatever the script. The warm-up rows run on a background thread, not the main actor. `load`, `add` and the thumbnail scenarios do not touch this code and are within noise of the baseline.

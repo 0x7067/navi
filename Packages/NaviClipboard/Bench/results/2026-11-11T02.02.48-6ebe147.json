@@ -1,0 +1,388 @@
+{
+  "commit" : "6ebe147",
+  "corpus" : "mixed",
+  "iterations" : 20,
+  "machine" : {
+    "cpu" : "Apple M4 Pro",
+    "macOS" : "Version 27.2 (Build 26B123)"
+  },
+  "recorded" : "2026-11-11T02:02:48Z",
+  "seed" : 42,
+  "sizes" : [
+    {
+      "historyKB" : 796.0224609375,
+      "items" : 200,
+      "scenarios" : [
+        {
+          "medianMs" : 1.4838545,
+          "minMs" : 1.416542,
+          "name" : "load",
+          "p95Ms" : 2.244916
+        },
+        {
+          "medianMs" : 2.8754995,
+          "minMs" : 2.601916,
+          "name" : "add",
+          "p95Ms" : 4.652458
+        },
+        {
+          "matches" : 29,
+          "medianMs" : 0.372125,
+          "minMs" : 0.360708,
+          "name" : "search-mixed-cyrillic",
+          "p95Ms" : 10.276834
+        },
+        {
+          "matches" : 33,
+          "medianMs" : 0.337958,
+          "minMs" : 0.327125,
+          "name" : "search-mixed-japanese",
+          "p95Ms" : 0.548458
+        },
+        {
+          "matches" : 39,
+          "medianMs" : 0.3519375,
+          "minMs" : 0.342666,
+          "name" : "search-mixed-arabic",
+          "p95Ms" : 0.45
+        },
+        {
+          "matches" : 28,
+          "medianMs" : 0.311396,
+          "minMs" : 0.303959,
+          "name" : "search-mixed-hindi",
+          "p95Ms" : 0.373792
+        },
+        {
+          "matches" : 25,
+          "medianMs" : 0.324541,
+          "minMs" : 0.317,
+          "name" : "search-mixed-emoji",
+          "p95Ms" : 0.400542
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 0.39156250000000004,
+          "minMs" : 0.375667,
+          "name" : "search-mixed-none",
+          "p95Ms" : 0.412125
+        },
+        {
+          "deferred" : 179,
+          "matches" : 2,
+          "medianMs" : 6.890979,
+          "minMs" : 6.043209,
+          "name" : "search-mixed-cold-cyrillic",
+          "p95Ms" : 11.217042
+        },
+        {
+          "deferred" : 175,
+          "matches" : 4,
+          "medianMs" : 7.183479500000001,
+          "minMs" : 6.030292,
+          "name" : "search-mixed-cold-japanese",
+          "p95Ms" : 10.688625
+        },
+        {
+          "deferred" : 183,
+          "matches" : 5,
+          "medianMs" : 7.2864795,
+          "minMs" : 6.011375,
+          "name" : "search-mixed-cold-arabic",
+          "p95Ms" : 11.039667
+        },
+        {
+          "deferred" : 189,
+          "matches" : 0,
+          "medianMs" : 7.3985005,
+          "minMs" : 6.011791,
+          "name" : "search-mixed-cold-hindi",
+          "p95Ms" : 10.311292
+        },
+        {
+          "deferred" : 179,
+          "matches" : 2,
+          "medianMs" : 7.7347090000000005,
+          "minMs" : 6.010875,
+          "name" : "search-mixed-cold-emoji",
+          "p95Ms" : 12.4365
+        },
+        {
+          "medianMs" : 7.903854,
+          "minMs" : 7.593375,
+          "name" : "search-warmup",
+          "p95Ms" : 8.065166
+        },
+        {
+          "matches" : 29,
+          "medianMs" : 0.3341035,
+          "minMs" : 0.327541,
+          "name" : "results",
+          "p95Ms" : 0.34575
+        },
+        {
+          "medianMs" : 0.130396,
+          "minMs" : 0.117958,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.143334
+        },
+        {
+          "medianMs" : 8.307667,
+          "minMs" : 7.8965,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 9.488917
+        }
+      ]
+    },
+    {
+      "historyKB" : 4330.1005859375,
+      "items" : 1000,
+      "scenarios" : [
+        {
+          "medianMs" : 7.6488955,
+          "minMs" : 7.462584,
+          "name" : "load",
+          "p95Ms" : 8.338958
+        },
+        {
+          "medianMs" : 13.1934165,
+          "minMs" : 12.148083,
+          "name" : "add",
+          "p95Ms" : 16.18675
+        },
+        {
+          "matches" : 154,
+          "medianMs" : 1.7945625,
+          "minMs" : 1.665375,
+          "name" : "search-mixed-cyrillic",
+          "p95Ms" : 6.04
+        },
+        {
+          "matches" : 148,
+          "medianMs" : 1.6798125000000002,
+          "minMs" : 1.59575,
+          "name" : "search-mixed-japanese",
+          "p95Ms" : 1.697208
+        },
+        {
+          "matches" : 152,
+          "medianMs" : 1.790979,
+          "minMs" : 1.747875,
+          "name" : "search-mixed-arabic",
+          "p95Ms" : 1.848625
+        },
+        {
+          "matches" : 145,
+          "medianMs" : 1.597333,
+          "minMs" : 1.478792,
+          "name" : "search-mixed-hindi",
+          "p95Ms" : 1.6375
+        },
+        {
+          "matches" : 158,
+          "medianMs" : 1.6493120000000001,
+          "minMs" : 1.64475,
+          "name" : "search-mixed-emoji",
+          "p95Ms" : 1.662792
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 2.096,
+          "minMs" : 2.040666,
+          "name" : "search-mixed-none",
+          "p95Ms" : 2.167791
+        },
+        {
+          "deferred" : 972,
+          "matches" : 0,
+          "medianMs" : 7.302958,
+          "minMs" : 6.115875,
+          "name" : "search-mixed-cold-cyrillic",
+          "p95Ms" : 9.22575
+        },
+        {
+          "deferred" : 975,
+          "matches" : 2,
+          "medianMs" : 6.865833,
+          "minMs" : 6.069,
+          "name" : "search-mixed-cold-japanese",
+          "p95Ms" : 10.222417
+        },
+        {
+          "deferred" : 975,
+          "matches" : 6,
+          "medianMs" : 7.0449165,
+          "minMs" : 6.116667,
+          "name" : "search-mixed-cold-arabic",
+          "p95Ms" : 10.967792
+        },
+        {
+          "deferred" : 971,
+          "matches" : 7,
+          "medianMs" : 7.846312,
+          "minMs" : 6.04775,
+          "name" : "search-mixed-cold-hindi",
+          "p95Ms" : 12.464459
+        },
+        {
+          "deferred" : 989,
+          "matches" : 2,
+          "medianMs" : 7.21775,
+          "minMs" : 6.055042,
+          "name" : "search-mixed-cold-emoji",
+          "p95Ms" : 10.442292
+        },
+        {
+          "medianMs" : 43.8683745,
+          "minMs" : 43.707292,
+          "name" : "search-warmup",
+          "p95Ms" : 44.66375
+        },
+        {
+          "matches" : 154,
+          "medianMs" : 1.786208,
+          "minMs" : 1.667875,
+          "name" : "results",
+          "p95Ms" : 1.807333
+        },
+        {
+          "medianMs" : 0.1256875,
+          "minMs" : 0.113708,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.136375
+        },
+        {
+          "medianMs" : 1.5219585,
+          "minMs" : 1.504042,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 1.536709
+        }
+      ]
+    },
+    {
+      "historyKB" : 22172.90625,
+      "items" : 5000,
+      "scenarios" : [
+        {
+          "medianMs" : 37.4857085,
+          "minMs" : 37.196042,
+          "name" : "load",
+          "p95Ms" : 39.081417
+        },
+        {
+          "medianMs" : 59.5547505,
+          "minMs" : 58.587375,
+          "name" : "add",
+          "p95Ms" : 62.85425
+        },
+        {
+          "matches" : 303,
+          "medianMs" : 6.1778960000000005,
+          "minMs" : 6.104042,
+          "name" : "search-mixed-cyrillic",
+          "p95Ms" : 6.240708
+        },
+        {
+          "matches" : 440,
+          "medianMs" : 6.132958,
+          "minMs" : 6.098667,
+          "name" : "search-mixed-japanese",
+          "p95Ms" : 6.203542
+        },
+        {
+          "matches" : 506,
+          "medianMs" : 6.1286665,
+          "minMs" : 6.096709,
+          "name" : "search-mixed-arabic",
+          "p95Ms" : 6.183792
+        },
+        {
+          "matches" : 553,
+          "medianMs" : 6.092417,
+          "minMs" : 6.056542,
+          "name" : "search-mixed-hindi",
+          "p95Ms" : 6.141458
+        },
+        {
+          "matches" : 546,
+          "medianMs" : 6.0719995,
+          "minMs" : 6.047416,
+          "name" : "search-mixed-emoji",
+          "p95Ms" : 6.164625
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 7.645875,
+          "minMs" : 7.303,
+          "name" : "search-mixed-none",
+          "p95Ms" : 7.681208
+        },
+        {
+          "deferred" : 4906,
+          "matches" : 12,
+          "medianMs" : 6.249874500000001,
+          "minMs" : 6.199875,
+          "name" : "search-mixed-cold-cyrillic",
+          "p95Ms" : 6.315583
+        },
+        {
+          "deferred" : 4914,
+          "matches" : 13,
+          "medianMs" : 6.246833,
+          "minMs" : 6.191667,
+          "name" : "search-mixed-cold-japanese",
+          "p95Ms" : 6.474958
+        },
+        {
+          "deferred" : 4916,
+          "matches" : 19,
+          "medianMs" : 6.254813,
+          "minMs" : 6.194417,
+          "name" : "search-mixed-cold-arabic",
+          "p95Ms" : 6.450166
+        },
+        {
+          "deferred" : 4916,
+          "matches" : 12,
+          "medianMs" : 6.250896,
+          "minMs" : 6.188625,
+          "name" : "search-mixed-cold-hindi",
+          "p95Ms" : 6.612417
+        },
+        {
+          "deferred" : 4924,
+          "matches" : 13,
+          "medianMs" : 6.2318125,
+          "minMs" : 6.181667,
+          "name" : "search-mixed-cold-emoji",
+          "p95Ms" : 6.481208
+        },
+        {
+          "medianMs" : 223.716583,
+          "minMs" : 221.402667,
+          "name" : "search-warmup",
+          "p95Ms" : 225.496292
+        },
+        {
+          "matches" : 784,
+          "medianMs" : 9.6760625,
+          "minMs" : 9.062375,
+          "name" : "results",
+          "p95Ms" : 9.994375
+        },
+        {
+          "medianMs" : 0.13135449999999999,
+          "minMs" : 0.127084,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.141458
+        },
+        {
+          "medianMs" : 1.6073335000000002,
+          "minMs" : 1.529875,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 2.091208
+        }
+      ]
+    }
+  ]
+}
