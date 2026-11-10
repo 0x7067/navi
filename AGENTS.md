@@ -105,6 +105,10 @@ video editor.
   backup from an older run keeps its entries; new IDs are added to it. SIGTERM quits the normal way, so
   `pkill` restores them too. No code runs when the app is deleted, so quitting
   is what gives the keys back. The first launch asks; the menu has a toggle.
+- In the `⇧⌘5` all-in-one bar, a dragged area stays on screen, like macOS:
+  drag inside to move it, drag a corner to resize it, pick Area, Scrolling,
+  Text, or Record in the bar, then press the bar's Capture/Record button or
+  Return. `⇧⌘4` still captures as soon as the drag ends.
 - Other hotkeys: `⌥⇧⌘4` scrolling capture, `⌥⇧⌘T` capture text, `⌥⇧⌘5` record
   (press again to stop).
 - Shots leave out Navi's overlays, cards, pins, and pills (window layer above 0)

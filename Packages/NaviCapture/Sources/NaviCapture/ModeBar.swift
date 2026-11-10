@@ -8,7 +8,7 @@ final class ModeBarPanel: NSPanel {
     @MainActor
     init(session: SelectionSession, screen: NSScreen) {
         model = ModeBarModel(session: session)
-        let size = CGSize(width: 640, height: 52)
+        let size = CGSize(width: 760, height: 52)
         let frame = CGRect(x: screen.frame.midX - size.width / 2, y: screen.frame.minY + 90, width: size.width, height: size.height)
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
@@ -61,6 +61,9 @@ private struct ModeBarView: View {
                 item("Record", "record.circle", on: session?.purpose == .record) { session?.purpose = .record }
             }
             Divider().frame(height: 26)
+            if session?.hasHeldSelection == true, let purpose = session?.purpose {
+                confirmButton(purpose) { session?.confirmHeldSelection() }
+            }
             Menu {
                 ForEach([0, 3, 5, 10], id: \.self) { seconds in
                     Button(seconds == 0 ? "No Timer" : "\(seconds) Seconds") {
@@ -83,6 +86,27 @@ private struct ModeBarView: View {
         .frame(height: 52)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .environment(\.colorScheme, .dark)
+    }
+
+    /// The main action for the held area: Capture, Record, Copy Text, or Scroll. Return does the same.
+    private func confirmButton(_ purpose: SelectionSession.Purpose, action: @escaping () -> Void) -> some View {
+        let (title, symbol, color): (String, String, Color) = switch purpose {
+        case .screenshot: ("Capture", "camera.fill", .accentColor)
+        case .record: ("Record", "record.circle.fill", .red)
+        case .text: ("Copy Text", "doc.on.doc.fill", .accentColor)
+        case .scroll: ("Scroll", "arrow.up.and.down", .accentColor)
+        }
+        return Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .background(Capsule().fill(color))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("\(title) (Return)")
     }
 
     private func item(_ title: String, _ symbol: String, on: Bool, action: @escaping () -> Void) -> some View {

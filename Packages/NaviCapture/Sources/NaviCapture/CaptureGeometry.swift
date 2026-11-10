@@ -19,6 +19,25 @@ public enum CaptureGeometry {
         CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
     }
 
+    /// `rect` moved by `offset`, kept inside `bounds`. The size never changes.
+    public static func moved(_ rect: CGRect, by offset: CGVector, within bounds: CGRect) -> CGRect {
+        var moved = rect.offsetBy(dx: offset.dx, dy: offset.dy)
+        moved.origin.x = min(max(moved.minX, bounds.minX), bounds.maxX - moved.width)
+        moved.origin.y = min(max(moved.minY, bounds.minY), bounds.maxY - moved.height)
+        return moved
+    }
+
+    /// When `point` is within `tolerance` of a corner of `rect`, the opposite corner: drag from it to resize.
+    public static func oppositeCorner(of rect: CGRect, near point: CGPoint, tolerance: CGFloat) -> CGPoint? {
+        let corners = [
+            (CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.maxY)),
+            (CGPoint(x: rect.maxX, y: rect.minY), CGPoint(x: rect.minX, y: rect.maxY)),
+            (CGPoint(x: rect.minX, y: rect.maxY), CGPoint(x: rect.maxX, y: rect.minY)),
+            (CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.minY)),
+        ]
+        return corners.first { hypot($0.0.x - point.x, $0.0.y - point.y) <= tolerance }?.1
+    }
+
     /// The pixel rect in a screen image for a selection in view-local points.
     /// The result is whole pixels and stays inside the image.
     public static func pixelRect(forSelection selection: CGRect, viewSize: CGSize, imageSize: CGSize) -> CGRect {

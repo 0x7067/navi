@@ -196,6 +196,7 @@ public final class CaptureFeature {
         session.purpose = purpose
         session.timer = timer
         session.showsModeBar = modeBar
+        session.holdsSelection = modeBar
         session.canRecord = onRecordRequest != nil
         self.session = session
         NSApp.activate()
