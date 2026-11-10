@@ -126,8 +126,9 @@ video editor.
 - Recording cards show the duration, an MP4/GIF switch on hover, and Trim in
   the bottom-left corner (`⌘E` on hover). Pin, markup, OCR, and background are
   for images only.
-- Save puts files on the Desktop, as `Navi 2026-11-06 at 16.10.12.png`.
-  `CaptureSettings.saveFolder` changes it.
+- Save puts files in the macOS screenshot folder (`defaults read com.apple.screencapture location`),
+  as `Navi 2026-11-06 at 16.10.12.png`, or on the Desktop when that folder is missing.
+  Navi's `capture.saveFolder` key overrides both (`CaptureSettings.saveFolder`).
 - Every screenshot goes to the clipboard as soon as it is taken, and again after
   markup Done (`CaptureSettings.copyToClipboard`, on by default; menu toggle
   "Copy Screenshots to Clipboard").
