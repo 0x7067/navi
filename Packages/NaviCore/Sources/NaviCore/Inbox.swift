@@ -15,6 +15,7 @@ public final class Inbox {
     public var limit: Int
 
     @ObservationIgnored private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Inbox")
+    private static let signposter = OSSignposter(subsystem: "com.donovanhiland.navi", category: "History")
 
     /// `~/Library/Application Support/Navi`. The test app, Navi Dev, keeps its own history in "Navi Dev".
     public static var defaultDirectory: URL {
@@ -220,6 +221,8 @@ public final class Inbox {
     }
 
     private func save() {
+        let interval = Self.signposter.beginInterval("InboxSave")
+        defer { Self.signposter.endInterval("InboxSave", interval) }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(items)

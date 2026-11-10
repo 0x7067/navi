@@ -30,6 +30,24 @@ public struct CaptureItem: Codable, Identifiable, Equatable, Sendable {
     public var sourceBundleID: String?
     /// SHA-256 of the content. Used to find duplicates.
     public var contentHash: String
+
+    /// Creates an item from its stored fields. `Inbox` sets the ID and times; the history benchmark seeds with it.
+    public init(
+        id: UUID, kind: CaptureKind, createdAt: Date, lastUsedAt: Date, copyCount: Int, pinned: Bool,
+        text: String?, fileName: String?, sourceApp: String?, sourceBundleID: String?, contentHash: String
+    ) {
+        self.id = id
+        self.kind = kind
+        self.createdAt = createdAt
+        self.lastUsedAt = lastUsedAt
+        self.copyCount = copyCount
+        self.pinned = pinned
+        self.text = text
+        self.fileName = fileName
+        self.sourceApp = sourceApp
+        self.sourceBundleID = sourceBundleID
+        self.contentHash = contentHash
+    }
 }
 
 extension CaptureItem {

@@ -20,9 +20,9 @@ enum Metrics {
 /// State for the history panel: the filter text, the selected row, and sizes.
 @MainActor
 @Observable
-final class ClipboardModel {
+public final class ClipboardModel {
     let inbox: Inbox
-    var query = "" {
+    public var query = "" {
         didSet { selection = 0 }
     }
     var selection = 0 {
@@ -40,11 +40,17 @@ final class ClipboardModel {
     /// Keyed by item ID and content hash, so an edited capture shows its new image.
     @ObservationIgnored private let images = NSCache<NSString, NSImage>()
 
-    init(inbox: Inbox) {
+    /// Creates the state for the history panel, reading from `inbox`.
+    public init(inbox: Inbox) {
         self.inbox = inbox
     }
 
-    var results: [CaptureItem] { inbox.search(query) }
+    /// The items that match the query, in display order.
+    public var results: [CaptureItem] {
+        let interval = HistorySignpost.signposter.beginInterval("Search")
+        defer { HistorySignpost.signposter.endInterval("Search", interval) }
+        return inbox.search(query)
+    }
 
     var selectedItem: CaptureItem? { item(at: selection) }
 
@@ -102,9 +108,12 @@ final class ClipboardModel {
         selection = 0
     }
 
-    func image(for item: CaptureItem) -> NSImage? {
+    /// The row image for an item, decoded on a cache miss and cached by item ID and content hash.
+    public func image(for item: CaptureItem) -> NSImage? {
         let key = "\(item.id.uuidString)-\(item.contentHash)" as NSString
         if let cached = images.object(forKey: key) { return cached }
+        let interval = HistorySignpost.signposter.beginInterval("RowImage")
+        defer { HistorySignpost.signposter.endInterval("RowImage", interval) }
         let preview = inbox.previewURL(for: item.id)
         let url = FileManager.default.fileExists(atPath: preview.path) ? preview : inbox.fileURL(for: item)
         guard let url, let image = NSImage(contentsOf: url) else { return nil }

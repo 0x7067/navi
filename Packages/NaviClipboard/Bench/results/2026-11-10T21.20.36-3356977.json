@@ -1,0 +1,186 @@
+{
+  "commit" : "3356977",
+  "iterations" : 20,
+  "machine" : {
+    "cpu" : "Apple M4 Pro",
+    "macOS" : "Version 27.2 (Build 26B123)"
+  },
+  "recorded" : "2026-11-10T21:20:36Z",
+  "seed" : 42,
+  "sizes" : [
+    {
+      "historyKB" : 379.978515625,
+      "items" : 200,
+      "scenarios" : [
+        {
+          "medianMs" : 0.6867705,
+          "minMs" : 0.650875,
+          "name" : "load",
+          "p95Ms" : 0.793541
+        },
+        {
+          "medianMs" : 1.814271,
+          "minMs" : 1.635542,
+          "name" : "add",
+          "p95Ms" : 2.42375
+        },
+        {
+          "matches" : 155,
+          "medianMs" : 0.32277100000000003,
+          "minMs" : 0.312584,
+          "name" : "search-common",
+          "p95Ms" : 0.36225
+        },
+        {
+          "matches" : 14,
+          "medianMs" : 1.4014790000000001,
+          "minMs" : 1.343292,
+          "name" : "search-rare",
+          "p95Ms" : 1.63575
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 1.4440625,
+          "minMs" : 1.398917,
+          "name" : "search-none",
+          "p95Ms" : 1.538833
+        },
+        {
+          "matches" : 155,
+          "medianMs" : 0.323479,
+          "minMs" : 0.310833,
+          "name" : "results",
+          "p95Ms" : 0.373292
+        },
+        {
+          "medianMs" : 0.130833,
+          "minMs" : 0.124709,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.163083
+        },
+        {
+          "medianMs" : 1.6821665000000001,
+          "minMs" : 1.54075,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 1.922875
+        }
+      ]
+    },
+    {
+      "historyKB" : 1825.4990234375,
+      "items" : 1000,
+      "scenarios" : [
+        {
+          "medianMs" : 3.494167,
+          "minMs" : 3.346583,
+          "name" : "load",
+          "p95Ms" : 3.811958
+        },
+        {
+          "medianMs" : 7.8675625,
+          "minMs" : 7.466458,
+          "name" : "add",
+          "p95Ms" : 10.244209
+        },
+        {
+          "matches" : 746,
+          "medianMs" : 1.674896,
+          "minMs" : 1.628958,
+          "name" : "search-common",
+          "p95Ms" : 3.036625
+        },
+        {
+          "matches" : 64,
+          "medianMs" : 6.6916455,
+          "minMs" : 6.521166,
+          "name" : "search-rare",
+          "p95Ms" : 8.019541
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 6.996896,
+          "minMs" : 6.846083,
+          "name" : "search-none",
+          "p95Ms" : 7.195375
+        },
+        {
+          "matches" : 746,
+          "medianMs" : 1.667792,
+          "minMs" : 1.604209,
+          "name" : "results",
+          "p95Ms" : 1.83925
+        },
+        {
+          "medianMs" : 0.134375,
+          "minMs" : 0.125542,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.284833
+        },
+        {
+          "medianMs" : 8.955874999999999,
+          "minMs" : 8.632125,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 9.08925
+        }
+      ]
+    },
+    {
+      "historyKB" : 8917.697265625,
+      "items" : 5000,
+      "scenarios" : [
+        {
+          "medianMs" : 17.315125000000002,
+          "minMs" : 16.87225,
+          "name" : "load",
+          "p95Ms" : 18.434333
+        },
+        {
+          "medianMs" : 35.9374165,
+          "minMs" : 35.061875,
+          "name" : "add",
+          "p95Ms" : 37.624417
+        },
+        {
+          "matches" : 3704,
+          "medianMs" : 8.6834585,
+          "minMs" : 8.278375,
+          "name" : "search-common",
+          "p95Ms" : 9.067375
+        },
+        {
+          "matches" : 280,
+          "medianMs" : 33.277125,
+          "minMs" : 32.453125,
+          "name" : "search-rare",
+          "p95Ms" : 33.600042
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 34.270770999999996,
+          "minMs" : 33.863625,
+          "name" : "search-none",
+          "p95Ms" : 34.624166
+        },
+        {
+          "matches" : 3704,
+          "medianMs" : 8.4274165,
+          "minMs" : 8.227833,
+          "name" : "results",
+          "p95Ms" : 8.80875
+        },
+        {
+          "medianMs" : 0.1443335,
+          "minMs" : 0.123667,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.254
+        },
+        {
+          "medianMs" : 1.7110835,
+          "minMs" : 1.526583,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 2.076125
+        }
+      ]
+    }
+  ]
+}
