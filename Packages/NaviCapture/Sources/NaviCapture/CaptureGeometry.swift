@@ -97,4 +97,18 @@ public enum CaptureGeometry {
             number += 1
         }
     }
+
+    /// Edit after capture: the top-left corner of the toolbar for an area, all in top-left points.
+    /// Below the area when it fits, else above it, else inside its bottom edge. Centered on the
+    /// area and kept `margin` inside the screen.
+    public static func toolbarOrigin(below area: CGRect, toolbar: CGSize, in screen: CGSize, gap: CGFloat, margin: CGFloat) -> CGPoint {
+        let centered = area.midX - toolbar.width / 2
+        let x = min(max(centered, margin), max(margin, screen.width - toolbar.width - margin))
+        let below = area.maxY + gap
+        if below + toolbar.height <= screen.height - margin { return CGPoint(x: x, y: below) }
+        let above = area.minY - gap - toolbar.height
+        if above >= margin { return CGPoint(x: x, y: above) }
+        let inside = min(area.maxY, screen.height - margin) - gap - toolbar.height
+        return CGPoint(x: x, y: max(margin, inside))
+    }
 }
