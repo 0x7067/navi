@@ -16,8 +16,13 @@ public final class Inbox {
 
     @ObservationIgnored private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Inbox")
 
+    /// Where history lives. Set `NAVI_DATA_DIR` to point a test build at its own folder,
+    /// so driving it never touches the real history.
     public static var defaultDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "Navi", directoryHint: .isDirectory)
+        if let path = ProcessInfo.processInfo.environment["NAVI_DATA_DIR"], !path.isEmpty {
+            return URL(filePath: path, directoryHint: .isDirectory)
+        }
+        return URL.applicationSupportDirectory.appending(path: "Navi", directoryHint: .isDirectory)
     }
 
     public init(directory: URL = Inbox.defaultDirectory, limit: Int = 200) {

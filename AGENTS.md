@@ -213,6 +213,7 @@ cd Packages/NaviRecording && swift test # recording math, GIF, audio mixdown
 cd Packages/NaviDictation && swift test # cleanup rules, fn gestures, fn setting, scoring
 cd Packages/NaviDictation && swift run dictation-bench [--audio [--speech apple,parakeet]] [--failures] [--save]
 pkill -x Navi; open build/Build/Products/Debug/Navi.app
+open --env NAVI_DATA_DIR="$PWD/build/test-data" build/Build/Products/Debug/Navi.app  # when driving a build: keeps the real history out of reach
 ```
 
 Releases live on GitHub (`donovanhiland/navi` is public). Run
