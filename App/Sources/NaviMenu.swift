@@ -62,6 +62,9 @@ final class NaviMenu: NSObject, NSMenuDelegate {
         menu.addItem(item("Hide Desktop Icons", on: settings.hideDesktopIcons) {
             settings.hideDesktopIcons.toggle()
         })
+        menu.addItem(item("Copy Screenshots to Clipboard", on: settings.copyToClipboard) {
+            settings.copyToClipboard.toggle()
+        })
         menu.addItem(item("Use Navi for Screenshot Keys", on: settings.useNaviScreenshotKeys == true) { [app] in
             app.setUseNaviScreenshotKeys(settings.useNaviScreenshotKeys != true)
         })

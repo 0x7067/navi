@@ -62,4 +62,18 @@ import Testing
         let url = CaptureGeometry.uniqueURL(in: folder, name: "a.png") { taken.contains($0.path) }
         #expect(url.lastPathComponent == "a (3).png")
     }
+
+    @Test func movingASelectionStaysOnScreen() {
+        let bounds = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let rect = CGRect(x: 10, y: 10, width: 30, height: 20)
+        #expect(CaptureGeometry.moved(rect, by: CGVector(dx: 5, dy: 5), within: bounds) == CGRect(x: 15, y: 15, width: 30, height: 20))
+        #expect(CaptureGeometry.moved(rect, by: CGVector(dx: 500, dy: -50), within: bounds) == CGRect(x: 70, y: 0, width: 30, height: 20))
+    }
+
+    @Test func grabbingACornerAnchorsTheOppositeOne() {
+        let rect = CGRect(x: 10, y: 10, width: 30, height: 20)
+        #expect(CaptureGeometry.oppositeCorner(of: rect, near: CGPoint(x: 12, y: 9), tolerance: 8) == CGPoint(x: 40, y: 30))
+        #expect(CaptureGeometry.oppositeCorner(of: rect, near: CGPoint(x: 41, y: 31), tolerance: 8) == CGPoint(x: 10, y: 10))
+        #expect(CaptureGeometry.oppositeCorner(of: rect, near: CGPoint(x: 25, y: 20), tolerance: 8) == nil)
+    }
 }

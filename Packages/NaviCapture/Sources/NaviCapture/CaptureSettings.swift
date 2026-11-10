@@ -17,6 +17,11 @@ public final class CaptureSettings {
         didSet { defaults.set(saveFolder.path, forKey: Keys.saveFolder) }
     }
 
+    /// Put every screenshot on the clipboard as soon as it is taken, and again after markup. Default: on.
+    public var copyToClipboard: Bool {
+        didSet { defaults.set(copyToClipboard, forKey: Keys.copyToClipboard) }
+    }
+
     /// Seconds before a corner card closes on its own. 0 means never.
     public var autoCloseSeconds: Double {
         didSet { defaults.set(autoCloseSeconds, forKey: Keys.autoCloseSeconds) }
@@ -32,6 +37,7 @@ public final class CaptureSettings {
         hideDesktopIcons = defaults.bool(forKey: Keys.hideDesktopIcons)
         saveFolder = defaults.string(forKey: Keys.saveFolder).map { URL(filePath: $0, directoryHint: .isDirectory) }
             ?? URL.desktopDirectory
+        copyToClipboard = defaults.object(forKey: Keys.copyToClipboard) as? Bool ?? true
         autoCloseSeconds = defaults.double(forKey: Keys.autoCloseSeconds)
         useNaviScreenshotKeys = defaults.object(forKey: Keys.useNaviScreenshotKeys) as? Bool
     }
@@ -39,6 +45,7 @@ public final class CaptureSettings {
     private enum Keys {
         static let hideDesktopIcons = "capture.hideDesktopIcons"
         static let saveFolder = "capture.saveFolder"
+        static let copyToClipboard = "capture.copyToClipboard"
         static let autoCloseSeconds = "capture.autoCloseSeconds"
         static let useNaviScreenshotKeys = "capture.useNaviScreenshotKeys"
     }

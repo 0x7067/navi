@@ -45,14 +45,16 @@ public final class Inbox {
         return item
     }
 
-    /// Adds file content, such as a PNG. The same content that is already in the history moves to the top.
+    /// Adds file content, such as a PNG. The same content that is already in the history moves to the top,
+    /// unless `deduplicate` is false. Captures pass false: each shot gets its own item, so its markup and
+    /// file never belong to an older shot of the same pixels.
     @discardableResult
     public func add(
         fileData: Data, fileExtension: String, kind: CaptureKind,
-        sourceApp: String? = nil, sourceBundleID: String? = nil, now: Date = .now
+        sourceApp: String? = nil, sourceBundleID: String? = nil, deduplicate: Bool = true, now: Date = .now
     ) -> CaptureItem? {
         let hash = Self.hash(fileData)
-        if let existing = bump(hash: hash, kind: kind, now: now) { return existing }
+        if deduplicate, let existing = bump(hash: hash, kind: kind, now: now) { return existing }
         let id = UUID()
         let name = "\(id.uuidString).\(fileExtension)"
         do {
@@ -125,6 +127,12 @@ public final class Inbox {
             (item.text?.localizedCaseInsensitiveContains(query) ?? false)
                 || (item.sourceApp?.localizedCaseInsensitiveContains(query) ?? false)
         }
+    }
+
+    /// The item's file content, or nil when the item has no file or it cannot be read.
+    public func fileData(for id: UUID) -> Data? {
+        guard let item = items.first(where: { $0.id == id }), let url = fileURL(for: item) else { return nil }
+        return try? Data(contentsOf: url)
     }
 
     public func fileURL(for item: CaptureItem) -> URL? {

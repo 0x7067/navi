@@ -44,6 +44,35 @@ public enum AnnotationTool: String, CaseIterable, Codable, Sendable {
         }
     }
 
+    /// The single key that picks this tool in the markup editor, like CleanShot X.
+    var shortcut: Character {
+        switch self {
+        case .select: "v"
+        case .arrow: "a"
+        case .rectangle: "r"
+        case .filledRectangle: "f"
+        case .ellipse: "o"
+        case .line: "l"
+        case .pencil: "p"
+        case .highlighter: "h"
+        case .text: "t"
+        case .counter: "n"
+        case .blur: "b"
+        case .pixelate: "x"
+        case .spotlight: "s"
+        case .crop: "c"
+        }
+    }
+
+    /// The tool for a key press without modifiers, or nil.
+    static func forShortcut(_ key: String) -> AnnotationTool? {
+        guard key.count == 1, let character = key.lowercased().first else { return nil }
+        return allCases.first { $0.shortcut == character }
+    }
+
+    /// The tooltip with the tool's key, such as "Arrow (A)".
+    var helpWithShortcut: String { "\(help) (\(shortcut.uppercased()))" }
+
     /// The tooltip: the name, and what the tool does when that is not clear from the name.
     var help: String {
         switch self {

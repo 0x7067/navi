@@ -28,6 +28,9 @@ final class SelectionSession {
         didSet {
             if purpose == .text || purpose == .scroll { mode = .area }
             refresh()
+            // Record picked with an area already held: go straight to the record bar. Its
+            // Record Video and Record GIF buttons are the one place that starts a recording.
+            if purpose == .record, oldValue != .record, hasHeldSelection { confirmHeldSelection() }
         }
     }
 
@@ -36,6 +39,13 @@ final class SelectionSession {
     /// Shows the all-in-one bar with every mode.
     var showsModeBar = false
     var canRecord = false
+    /// All-in-one: an area stays on screen after the drag, so it can be moved, resized, and then
+    /// captured from the bar (or with Return), or handed to the record bar by picking Record.
+    /// Otherwise the drag ends the selection. In Record mode the drag goes straight to the record bar.
+    var holdsSelection = false
+    /// The overlay that holds the finished area, while `holdsSelection` is on.
+    private weak var heldOverlay: OverlayView?
+    var hasHeldSelection: Bool { heldOverlay != nil }
     private var modeBar: ModeBarPanel?
     /// App windows in Cocoa global coordinates, front to back.
     let windows: [OnScreenWindow]
@@ -79,6 +89,7 @@ final class SelectionSession {
             switch Int(event.keyCode) {
             case kVK_Escape: finish(.cancelled)
             case kVK_Space: toggleMode()
+            case kVK_Return, kVK_ANSI_KeypadEnter: confirmHeldSelection()
             default: break
             }
             return nil
@@ -94,11 +105,35 @@ final class SelectionSession {
     func setMode(_ mode: Mode) {
         self.mode = mode
         for overlay in overlays { overlay.overlayView.resetDrag() }
+        heldOverlay = nil
         refresh()
+    }
+
+    /// An overlay now holds an area (or nil: it let go of it). Only one display holds an area.
+    func holdChanged(_ overlay: OverlayView?) {
+        if let overlay {
+            for other in overlays where other.overlayView !== overlay { other.overlayView.resetDrag() }
+        }
+        heldOverlay = overlay
+        refresh()
+    }
+
+    /// Captures, records, or reads the held area, by the purpose picked in the bar.
+    func confirmHeldSelection() {
+        heldOverlay?.finishSelection()
     }
 
     /// The text that tells the user what to do now.
     var hint: String {
+        if hasHeldSelection {
+            let verb = switch purpose {
+            case .screenshot: "capture"
+            case .text: "copy the text"
+            case .scroll: "start scrolling"
+            case .record: "open the record bar"
+            }
+            return "Return to \(verb)  ·  Drag inside to move, corners to resize  ·  Esc to cancel"
+        }
         let action = switch purpose {
         case .screenshot: mode == .area ? "Drag to capture" : "Click a window"
         case .text: "Drag over text to copy it"
@@ -228,6 +263,7 @@ final class OverlayView: NSView {
         switch Int(event.keyCode) {
         case kVK_Escape: session?.finish(.cancelled)
         case kVK_Space: session?.toggleMode()
+        case kVK_Return, kVK_ANSI_KeypadEnter: session?.confirmHeldSelection()
         default: super.keyDown(with: event)
         }
     }
@@ -235,7 +271,16 @@ final class OverlayView: NSView {
     func resetDrag() {
         dragStart = nil
         dragCurrent = nil
+        isHolding = false
+        moveStart = nil
+        needsDisplay = true
     }
+
+    /// True while this overlay holds a finished area (all-in-one only).
+    private var isHolding = false
+    /// Where a move of the held area started, and the area at that moment.
+    private var moveStart: (point: CGPoint, rect: CGRect)?
+    private static let cornerGrab: CGFloat = 10
 
     // MARK: Mouse
 
@@ -262,9 +307,17 @@ final class OverlayView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        mouse = location(of: event)
-        (mode == .area ? NSCursor.crosshair : OverlayView.cameraCursor).set()
+        let point = location(of: event)
+        mouse = point
+        cursor(at: point).set()
         needsDisplay = true
+    }
+
+    private func cursor(at point: CGPoint) -> NSCursor {
+        guard mode == .area else { return OverlayView.cameraCursor }
+        guard isHolding, let selection else { return .crosshair }
+        if CaptureGeometry.oppositeCorner(of: selection, near: point, tolerance: Self.cornerGrab) != nil { return .crosshair }
+        return selection.contains(point) ? .openHand : .crosshair
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -274,6 +327,23 @@ final class OverlayView: NSView {
         case .window:
             if let window = hoveredWindow(at: point) { session?.finish(.window(window.id, screen)) }
         case .area:
+            if isHolding, let selection {
+                if let anchor = CaptureGeometry.oppositeCorner(of: selection, near: point, tolerance: Self.cornerGrab) {
+                    // Resize: keep the far corner, drag this one.
+                    dragStart = anchor
+                    dragCurrent = point
+                    needsDisplay = true
+                    return
+                }
+                if selection.contains(point) {
+                    moveStart = (point, selection)
+                    NSCursor.closedHand.set()
+                    return
+                }
+                // Outside the held area: start a new one.
+                session?.holdChanged(nil)
+                isHolding = false
+            }
             dragStart = snapped(point)
             dragCurrent = dragStart
             needsDisplay = true
@@ -284,17 +354,41 @@ final class OverlayView: NSView {
         guard mode == .area, dragStart != nil else { return }
         let point = location(of: event)
         mouse = point
+        if let move = moveStart {
+            let rect = CaptureGeometry.moved(
+                move.rect, by: CGVector(dx: point.x - move.point.x, dy: point.y - move.point.y), within: bounds
+            )
+            dragStart = rect.origin
+            dragCurrent = CGPoint(x: rect.maxX, y: rect.maxY)
+            needsDisplay = true
+            return
+        }
         dragCurrent = snapped(point)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
         guard mode == .area, let selection else { return }
-        resetDrag()
+        moveStart = nil
         guard selection.width >= 2, selection.height >= 2 else {
-            needsDisplay = true
+            resetDrag()
+            if session?.holdsSelection == true, session?.purpose != .record { session?.holdChanged(nil) }
             return
         }
+        if session?.holdsSelection == true {
+            // All-in-one: keep the area until the bar or Return says what to do with it.
+            isHolding = true
+            session?.holdChanged(self)
+            cursor(at: location(of: event)).set()
+            return
+        }
+        finishSelection()
+    }
+
+    /// Ends the session with the current area. It waits for the frozen screen when needed.
+    func finishSelection() {
+        guard mode == .area, let selection, selection.width >= 2, selection.height >= 2 else { return }
+        resetDrag()
         let finish = { [weak self] in
             guard let self, let captured else { return }
             let pixels = CaptureGeometry.pixelRect(forSelection: selection, viewSize: bounds.size, imageSize: imageSize)
@@ -364,6 +458,7 @@ final class OverlayView: NSView {
                 context.setStrokeColor(NSColor.white.cgColor)
                 context.setLineWidth(1)
                 context.stroke(selection.insetBy(dx: -0.5, dy: -0.5))
+                if isHolding { drawCornerHandles(of: selection, in: context) }
                 drawSizeLabel(for: selection)
             }
             if let mouse, let captured { drawMagnifier(at: mouse, image: captured.image, in: context) }
@@ -378,6 +473,22 @@ final class OverlayView: NSView {
         }
 
         if mouse != nil { drawModeTag() }
+    }
+
+    /// Round handles on the held area's corners: drag one to resize.
+    private func drawCornerHandles(of rect: CGRect, in context: CGContext) {
+        let size: CGFloat = 8
+        for corner in [
+            CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.minX, y: rect.maxY), CGPoint(x: rect.maxX, y: rect.maxY),
+        ] {
+            let dot = CGRect(x: corner.x - size / 2, y: corner.y - size / 2, width: size, height: size)
+            context.setFillColor(NSColor.white.cgColor)
+            context.fillEllipse(in: dot)
+            context.setStrokeColor(Self.accent.cgColor)
+            context.setLineWidth(1.5)
+            context.strokeEllipse(in: dot)
+        }
     }
 
     private func drawSizeLabel(for selection: CGRect) {

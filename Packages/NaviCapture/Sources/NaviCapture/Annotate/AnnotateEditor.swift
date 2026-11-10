@@ -57,8 +57,9 @@ final class AnnotateEditor: NSObject, NSWindowDelegate {
         window?.close()
     }
 
-    /// ⌘Z undo, ⇧⌘Z redo, and Delete for the selected mark. A local key monitor works even
-    /// though Navi has no Edit menu. While text is being typed, the text field keeps these keys.
+    /// ⌘Z undo, ⇧⌘Z redo, Delete for the selected mark, and one letter per tool (A arrow, T text…).
+    /// A local key monitor works even though Navi has no Edit menu. While text is being typed, the
+    /// text field keeps these keys, and Esc ends the typing instead of closing the editor.
     private func watchKeys() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let windowNumber = event.windowNumber
@@ -67,9 +68,17 @@ final class AnnotateEditor: NSObject, NSWindowDelegate {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
                 .subtracting([.function, .numericPad, .capsLock])
             let handled = MainActor.assumeIsolated { () -> Bool in
-                guard let self, let window = self.window, window.windowNumber == windowNumber,
-                      self.model.textEdit == nil
-                else { return false }
+                guard let self, let window = self.window, window.windowNumber == windowNumber else { return false }
+                // 53 is Escape.
+                if self.model.textEdit != nil {
+                    guard code == 53 else { return false }
+                    self.model.finishText()
+                    return true
+                }
+                if flags.isEmpty, let key, let tool = AnnotationTool.forShortcut(key) {
+                    self.model.tool = tool
+                    return true
+                }
                 if key == "z", flags == .command { self.model.undo(); return true }
                 if key == "z", flags == [.command, .shift] { self.model.redo(); return true }
                 // 51 is Delete (backspace), 117 is Forward Delete.
@@ -95,6 +104,7 @@ struct AnnotateView: View {
     @Bindable var model: AnnotateModel
     let onDone: () -> Void
     let onCancel: () -> Void
+    @FocusState private var isTyping: Bool
 
     private static let drawingTools: [AnnotationTool] = [
         .select, .arrow, .rectangle, .filledRectangle, .ellipse, .line, .pencil, .highlighter, .text, .counter,
@@ -210,7 +220,7 @@ struct AnnotateView: View {
     }
 
     private func toolButton(_ tool: AnnotationTool) -> some View {
-        IconButton(isOn: model.tool == tool, help: tool.help) { model.tool = tool } label: {
+        IconButton(isOn: model.tool == tool, help: tool.helpWithShortcut) { model.tool = tool } label: {
             Image(systemName: tool.symbol)
         }
     }
@@ -264,36 +274,41 @@ struct AnnotateView: View {
             let fit = min(1 / model.scale, (proxy.size.width - 40) / pixels.width, (proxy.size.height - 40) / pixels.height)
             let shown = CGSize(width: pixels.width * fit, height: pixels.height * fit)
             ZStack(alignment: .topLeading) {
-                if let image = model.rendered {
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: shown.width, height: shown.height)
-                        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                ZStack(alignment: .topLeading) {
+                    if let image = model.rendered {
+                        Image(decorative: image, scale: 1)
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: shown.width, height: shown.height)
+                            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                    }
+                    if let mark = model.selectedMark, model.cropRect == nil {
+                        SelectionOverlay(mark: mark, fit: fit)
+                    }
+                    if let crop = model.cropRect {
+                        cropOverlay(crop, fit: fit, shown: shown)
+                    }
                 }
-                if let mark = model.selectedMark, model.cropRect == nil {
-                    SelectionOverlay(mark: mark, fit: fit)
+                .frame(width: shown.width, height: shown.height, alignment: .topLeading)
+                .contentShape(Rectangle())
+                .gesture(drawGesture(fit: fit))
+                .onContinuousHover { phase in
+                    switch phase {
+                    case let .active(location): model.cursor(at: pixel(location, fit: fit)).set()
+                    case .ended: NSCursor.arrow.set()
+                    }
                 }
-                if let crop = model.cropRect {
-                    cropOverlay(crop, fit: fit, shown: shown)
+                .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
+                    loadDroppedImage(providers)
+                    return true
                 }
-                if model.textEdit != nil {
+                // The text box sits above the drawing gesture, so clicks and typing go to the box.
+                if let edit = model.textEdit {
                     textField(fit: fit)
+                        .task(id: "\(edit.point.x),\(edit.point.y)") { isTyping = true }
                 }
             }
-            .frame(width: shown.width, height: shown.height)
-            .contentShape(Rectangle())
-            .gesture(drawGesture(fit: fit))
-            .onContinuousHover { phase in
-                switch phase {
-                case let .active(location): model.cursor(at: pixel(location, fit: fit)).set()
-                case .ended: NSCursor.arrow.set()
-                }
-            }
-            .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
-                loadDroppedImage(providers)
-                return true
-            }
+            .frame(width: shown.width, height: shown.height, alignment: .topLeading)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.black.opacity(0.2))
@@ -345,19 +360,25 @@ struct AnnotateView: View {
         }
     }
 
+    /// The typing box. Its own text is invisible: the canvas draws the typed text with the same
+    /// renderer as finished text, so nothing changes (font, outline, place) when the box closes.
+    /// The field only supplies the caret, keys, and the outline.
     private func textField(fit: CGFloat) -> some View {
         let point = model.textEdit?.point ?? .zero
-        let fontSize = (8 + model.strokeSize.rawValue * 3) * model.scale * fit
-        return TextField("Type", text: Binding(
+        let fontSize = model.textEditFontSize * fit
+        let color = Color(.sRGB, red: model.color.red, green: model.color.green, blue: model.color.blue)
+        return TextField("", text: Binding(
             get: { model.textEdit?.text ?? "" },
             set: { model.textEdit?.text = $0 }
         ), axis: .vertical)
             .textFieldStyle(.plain)
-            .font(.system(size: max(12, fontSize), weight: .bold))
-            .foregroundStyle(Color(.sRGB, red: model.color.red, green: model.color.green, blue: model.color.blue))
+            .focused($isTyping)
+            .font(.system(size: fontSize, weight: .bold))
+            .foregroundStyle(.clear)
+            .tint(color)
             .frame(minWidth: 120, maxWidth: 400, alignment: .leading)
-            .padding(2)
-            .background(RoundedRectangle(cornerRadius: 3).stroke(Color.accentColor, lineWidth: 1))
+            // The outline sits outside the text, so the text starts exactly at the mark's point.
+            .background(RoundedRectangle(cornerRadius: 3).stroke(Color.accentColor, lineWidth: 1).padding(-3))
             .offset(x: point.x * fit, y: point.y * fit)
             .onSubmit(model.finishText)
     }

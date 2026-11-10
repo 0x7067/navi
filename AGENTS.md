@@ -105,6 +105,13 @@ video editor.
   backup from an older run keeps its entries; new IDs are added to it. SIGTERM quits the normal way, so
   `pkill` restores them too. No code runs when the app is deleted, so quitting
   is what gives the keys back. The first launch asks; the menu has a toggle.
+- In the `⇧⌘5` all-in-one bar, a dragged area stays on screen, like macOS:
+  drag inside to move it, drag a corner to resize it, then press the bar's
+  Capture (or Copy Text, Start Scrolling) button or Return. Picking Record
+  hands the area to the record bar at once; in Record mode a drag goes
+  straight to the record bar. The record bar's Record Video / Record GIF
+  is the only button that starts a recording. `⇧⌘4` still captures as soon
+  as the drag ends.
 - Other hotkeys: `⌥⇧⌘4` scrolling capture, `⌥⇧⌘T` capture text, `⌥⇧⌘5` record
   (press again to stop).
 - Shots leave out Navi's overlays, cards, pins, and pills (window layer above 0)
@@ -121,6 +128,17 @@ video editor.
   for images only.
 - Save puts files on the Desktop, as `Navi 2026-11-06 at 16.10.12.png`.
   `CaptureSettings.saveFolder` changes it.
+- Every screenshot goes to the clipboard as soon as it is taken, and again after
+  markup Done (`CaptureSettings.copyToClipboard`, on by default; menu toggle
+  "Copy Screenshots to Clipboard").
+- Each capture is its own history item, even when its pixels match an older
+  shot (`Inbox.add(fileData:…, deduplicate: false)`). Saved markup opens only
+  while the history file is still that markup's flat image.
+- Markup editor keys: V select, A arrow, R rectangle, F filled rectangle,
+  O ellipse, L line, P pencil, H highlighter, T text, N counter, B blur,
+  X pixelate, S spotlight, C crop. Text: the box takes focus at once; a click
+  outside keeps the text and selects it; drag text with the text or select
+  tool; click selected text to edit it; Esc ends typing.
 - Copy and Save close the card, like CleanShot X. ⌥ + Copy keeps it open. Show
   in Finder keeps it open.
 - While the mouse is on a card: `⌘C` copy, `⌘S` save, `⌘W` close. They are

@@ -110,4 +110,24 @@ struct InboxTests {
         inbox.remove(item.id)
         #expect(!FileManager.default.fileExists(atPath: markup.path))
     }
+
+    /// Two shots of the same pixels must be two items. Before, the second shot reused the first item,
+    /// so its card opened the first shot's markup in the editor.
+    @Test func sameCaptureTwiceMakesTwoItemsWhenNotDeduplicated() throws {
+        let inbox = Inbox(directory: directory)
+        let png = Data([1, 2, 3])
+        let first = try #require(inbox.add(fileData: png, fileExtension: "png", kind: .screenshot, deduplicate: false, now: start))
+        let second = try #require(inbox.add(fileData: png, fileExtension: "png", kind: .screenshot, deduplicate: false, now: start + 1))
+        #expect(first.id != second.id)
+        #expect(inbox.items.map(\.id) == [second.id, first.id])
+        #expect(inbox.fileData(for: second.id) == png)
+    }
+
+    @Test func sameFileTwiceIsDeduplicatedByDefault() throws {
+        let inbox = Inbox(directory: directory)
+        let first = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .image, now: start))
+        let again = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .image, now: start + 1))
+        #expect(again.id == first.id)
+        #expect(inbox.items.count == 1)
+    }
 }

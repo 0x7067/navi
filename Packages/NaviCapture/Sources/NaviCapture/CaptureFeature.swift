@@ -138,7 +138,7 @@ public final class CaptureFeature {
             let thumbnail = await Self.thumbnail(of: videoURL)
             // The history keeps the MP4. The card can switch to GIF for sharing.
             let item: CaptureItem? = (try? Data(contentsOf: videoURL)).flatMap { data in
-                inbox.add(fileData: data, fileExtension: "mp4", kind: .recording, sourceApp: "Navi")
+                inbox.add(fileData: data, fileExtension: "mp4", kind: .recording, sourceApp: "Navi", deduplicate: false)
             }
             let size = thumbnail.map { CGSize(width: $0.width, height: $0.height) } ?? CGSize(width: 320, height: 200)
             let image = thumbnail.map { Self.image($0, pointSize: size) } ?? NSImage(size: size)
@@ -196,6 +196,7 @@ public final class CaptureFeature {
         session.purpose = purpose
         session.timer = timer
         session.showsModeBar = modeBar
+        session.holdsSelection = modeBar
         session.canRecord = onRecordRequest != nil
         self.session = session
         NSApp.activate()
@@ -308,17 +309,17 @@ public final class CaptureFeature {
             width: CGFloat(captured.image.width) / captured.scale,
             height: CGFloat(captured.image.height) / captured.scale
         )
-        if copiesNextShot {
-            copiesNextShot = false
+        if copiesNextShot || settings.copyToClipboard {
             NaviPasteboard.write(image: Self.image(captured.image, pointSize: pointSize))
         }
+        copiesNextShot = false
         guard let png = ImageOps.png(captured.image, pointSize: pointSize) else {
             logger.error("Could not encode the capture as PNG")
             return
         }
         let item = inbox.add(
             fileData: png, fileExtension: "png", kind: .screenshot,
-            sourceApp: sourceApp?.localizedName, sourceBundleID: sourceApp?.bundleIdentifier
+            sourceApp: sourceApp?.localizedName, sourceBundleID: sourceApp?.bundleIdentifier, deduplicate: false
         )
         do {
             let card = try Card(inboxID: item?.id, image: Self.image(captured.image, pointSize: pointSize), png: png, createdAt: .now)
@@ -385,7 +386,10 @@ public final class CaptureFeature {
         guard let current = card.cgImage else { return }
         var base = current
         var document = AnnotationDocument()
-        if let id = card.inboxID, let saved = MarkupStore.load(from: inbox.markupURL(for: id)) {
+        // Saved marks belong to this card only while its history file is still the flat image of those
+        // marks. Otherwise they are from another shot, so start fresh from what the card shows.
+        if let id = card.inboxID, inbox.fileData(for: id) == card.png,
+           let saved = MarkupStore.load(from: inbox.markupURL(for: id)) {
             (base, document) = saved
         }
         let token = UUID()
@@ -400,7 +404,9 @@ public final class CaptureFeature {
 
     private func applyMarkup(_ result: AnnotateEditor.Result, to card: Card) {
         guard let png = ImageOps.png(result.flat, pointSize: result.pointSize) else { return }
-        card.update(image: Self.image(result.flat, pointSize: result.pointSize), png: png)
+        let image = Self.image(result.flat, pointSize: result.pointSize)
+        card.update(image: image, png: png)
+        if settings.copyToClipboard { NaviPasteboard.write(image: image) }
         guard let id = card.inboxID else { return }
         inbox.updateFile(id, data: png)
         do {
