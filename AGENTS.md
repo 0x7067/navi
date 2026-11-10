@@ -121,6 +121,9 @@ video editor.
 - The selection overlay shows at once over the live screen. The frozen screen
   images arrive about 0.2 s later and are what gets cropped; a selection that
   ends first waits for them.
+- Screen Recording is requested at launch through ScreenCaptureKit
+  (`SCShareableContent`), which lists Navi in System Settings, switched off, so
+  users only flip the switch.
 - Cards stay on the display where the capture was taken.
 - The history keeps a recording as MP4, with `<id>.preview.png` for its
   thumbnail; paste from history pastes the file. Background clears the

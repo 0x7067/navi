@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import NaviCore
+import ScreenCaptureKit
 import os
 
 /// A part of the screen to record. The app passes it to the recording feature.
@@ -68,10 +69,17 @@ public final class CaptureFeature {
     /// Screen Recording permission, needed for every capture.
     public static var hasScreenAccess: Bool { CGPreflightScreenCaptureAccess() }
 
-    /// Shows the macOS prompt, or adds Navi to System Settings > Privacy & Security > Screen Recording.
-    public static func requestScreenAccess() {
-        if !CGRequestScreenCaptureAccess(),
-           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+    /// Asks for Screen Recording the way ScreenCaptureKit apps do. macOS shows its prompt and adds
+    /// Navi to System Settings > Privacy & Security > Screen Recording, switched off, so the user
+    /// only flips the switch (never the + button). Then the settings page opens if access is still off.
+    public static func requestScreenAccess(openSettings: Bool = true) {
+        Task { @MainActor in
+            _ = CGRequestScreenCaptureAccess()
+            // Asking ScreenCaptureKit for the screen list is what lists the app in Settings.
+            _ = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard openSettings, !CGPreflightScreenCaptureAccess(),
+                  let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+            else { return }
             NSWorkspace.shared.open(url)
         }
     }

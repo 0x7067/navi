@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "App")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // First launch (or no access yet): macOS asks for Screen Recording and lists Navi in Settings.
+        if !CaptureFeature.hasScreenAccess { CaptureFeature.requestScreenAccess(openSettings: false) }
         clipboard.start()
         _ = naviMenu
         historyHotKey = register("⇧⌘V", keyCode: kVK_ANSI_V) { [weak self] in self?.clipboard.togglePanel() }
