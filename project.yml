@@ -38,7 +38,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Navi
+        CFBundleDisplayName: $(PRODUCT_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         SUFeedURL: https://github.com/donovanhiland/navi/releases/latest/download/appcast.xml
@@ -62,3 +62,9 @@ targets:
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Development"
         ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        # Test builds are a separate app, "Navi Dev", so macOS keeps their permissions apart
+        # from the installed Navi (different signature) and Settings never shows two "Navi".
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.donovanhiland.navi.dev
+          PRODUCT_NAME: Navi Dev

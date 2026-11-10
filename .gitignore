@@ -1,7 +1,9 @@
 *.xcodeproj
 App/Info.plist
 build/
+build.noindex/
 .build/
+build.noindex/
 .swiftpm/
 DerivedData/
 xcuserdata/

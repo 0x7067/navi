@@ -210,14 +210,14 @@ files (use `decodeIfPresent` in `init(from:)`).
 ```sh
 xcodegen generate                       # after you change project.yml or add files
 ~/.local/bin/heavy -- xcodebuild -project Navi.xcodeproj -scheme Navi \
-  -configuration Debug -derivedDataPath build -quiet build
+  -configuration Debug -derivedDataPath build.noindex -quiet build
 cd Packages/NaviCore && swift test      # unit tests, run directly
 cd Packages/NaviCapture && swift test   # capture, markup, stitch, background tests
 NAVI_SNAPSHOTS=/tmp/navi-snaps swift test --filter EditorSnapshot  # in NaviCapture: draws the markup editor to PNGs (760/1000/1400 wide, dark and light) to check its look
 cd Packages/NaviRecording && swift test # recording math, GIF, audio mixdown
 cd Packages/NaviDictation && swift test # cleanup rules, fn gestures, fn setting, scoring
 cd Packages/NaviDictation && swift run dictation-bench [--audio [--speech apple,parakeet]] [--failures] [--save]
-pkill -x Navi; open build/Build/Products/Debug/Navi.app
+scripts/dev.sh          # build and run Navi Dev in place of Navi (fresh: wipe it first; stop: back to Navi)
 ```
 
 Releases live on GitHub (`donovanhiland/navi` is public). Run
@@ -238,8 +238,19 @@ signed in to Xcode, and staples it. Output: `dist/Navi.zip`. Not
 TestFlight or the App Store: both need the app sandbox, which blocks the system
 shortcut and paste features.
 
-Signing uses the Apple Development certificate, team `77SAW76597`, set in
-`project.yml`. `App/Navi.entitlements` (generated from `project.yml`) holds the
+Test locally with `scripts/dev.sh`. It quits Navi, builds, and runs Navi Dev
+(they share shortcuts, so one runs at a time). `scripts/dev.sh fresh` wipes
+Navi Dev's permissions, settings, and history first, to test first-run setup.
+`scripts/dev.sh stop` quits Navi Dev and reopens Navi. Builds go to
+`build.noindex/` so Spotlight lists only the installed Navi. Navi Dev keeps its
+history in `~/Library/Application Support/Navi Dev`.
+
+Debug builds are a separate app, **Navi Dev** (`com.donovanhiland.navi.dev`),
+signed with the Apple Development certificate, team `77SAW76597`. Release
+builds are **Navi** (`com.donovanhiland.navi`), signed with Developer ID by
+Xcode's cloud signing during export (no Developer ID private key on this Mac).
+macOS ties permissions to the signature, so the two apps get separate
+permissions. Donovan's own copy is the release in `/Applications`. `App/Navi.entitlements` (generated from `project.yml`) holds the
 microphone and camera entitlements that the hardened runtime needs. Keep a stable signature so macOS keeps the Accessibility and
 Screen Recording permissions between builds.
 
