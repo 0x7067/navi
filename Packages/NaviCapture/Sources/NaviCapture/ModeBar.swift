@@ -61,7 +61,9 @@ private struct ModeBarView: View {
                 item("Record", "record.circle", on: session?.purpose == .record) { session?.purpose = .record }
             }
             Divider().frame(height: 26)
-            if session?.hasHeldSelection == true, let purpose = session?.purpose {
+            // No action button for Record: picking Record opens the record bar, which has the
+            // only Record Video / Record GIF buttons.
+            if session?.hasHeldSelection == true, let purpose = session?.purpose, purpose != .record {
                 confirmButton(purpose) { session?.confirmHeldSelection() }
             }
             Menu {
@@ -88,12 +90,12 @@ private struct ModeBarView: View {
         .environment(\.colorScheme, .dark)
     }
 
-    /// The main action for the held area: Capture, Start Recording, Copy Text, or Start Scrolling. Return does the same.
+    /// The main action for the held area: Capture, Copy Text, or Start Scrolling. Return does the same.
     private func confirmButton(_ purpose: SelectionSession.Purpose, action: @escaping () -> Void) -> some View {
         let (title, symbol, color): (String, String, Color) = switch purpose {
         // Verbs, so they do not repeat the mode names in the bar (Record, Text, Scrolling).
         case .screenshot: ("Capture", "camera.fill", .accentColor)
-        case .record: ("Start Recording", "record.circle.fill", .red)
+        case .record: ("Record", "record.circle.fill", .red) // Not shown; see above.
         case .text: ("Copy Text", "doc.on.doc.fill", .accentColor)
         case .scroll: ("Start Scrolling", "arrow.up.and.down", .accentColor)
         }

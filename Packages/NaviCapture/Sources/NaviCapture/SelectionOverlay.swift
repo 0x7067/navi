@@ -28,6 +28,9 @@ final class SelectionSession {
         didSet {
             if purpose == .text || purpose == .scroll { mode = .area }
             refresh()
+            // Record picked with an area already held: go straight to the record bar. Its
+            // Record Video and Record GIF buttons are the one place that starts a recording.
+            if purpose == .record, oldValue != .record, hasHeldSelection { confirmHeldSelection() }
         }
     }
 
@@ -37,7 +40,8 @@ final class SelectionSession {
     var showsModeBar = false
     var canRecord = false
     /// All-in-one: an area stays on screen after the drag, so it can be moved, resized, and then
-    /// captured or recorded from the bar (or with Return). Otherwise the drag ends the selection.
+    /// captured from the bar (or with Return), or handed to the record bar by picking Record.
+    /// Otherwise the drag ends the selection. In Record mode the drag goes straight to the record bar.
     var holdsSelection = false
     /// The overlay that holds the finished area, while `holdsSelection` is on.
     private weak var heldOverlay: OverlayView?
@@ -126,7 +130,7 @@ final class SelectionSession {
             case .screenshot: "capture"
             case .text: "copy the text"
             case .scroll: "start scrolling"
-            case .record: "start recording"
+            case .record: "open the record bar"
             }
             return "Return to \(verb)  ·  Drag inside to move, corners to resize  ·  Esc to cancel"
         }
@@ -368,7 +372,7 @@ final class OverlayView: NSView {
         moveStart = nil
         guard selection.width >= 2, selection.height >= 2 else {
             resetDrag()
-            if session?.holdsSelection == true { session?.holdChanged(nil) }
+            if session?.holdsSelection == true, session?.purpose != .record { session?.holdChanged(nil) }
             return
         }
         if session?.holdsSelection == true {
