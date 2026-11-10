@@ -12,9 +12,31 @@ public final class CaptureSettings {
         didSet { defaults.set(hideDesktopIcons, forKey: Keys.hideDesktopIcons) }
     }
 
-    /// Where Save puts files. Default: the Desktop, like macOS and CleanShot X.
+    /// Navi's own save folder. Nil follows the macOS screenshot folder, then the Desktop.
+    public var saveFolderOverride: URL? {
+        didSet {
+            if let saveFolderOverride {
+                defaults.set(saveFolderOverride.path, forKey: Keys.saveFolder)
+            } else {
+                defaults.removeObject(forKey: Keys.saveFolder)
+            }
+        }
+    }
+
+    /// Where Save puts files: the override if set, else the macOS screenshot folder, else the Desktop.
     public var saveFolder: URL {
-        didSet { defaults.set(saveFolder.path, forKey: Keys.saveFolder) }
+        get {
+            SaveFolder.resolve(
+                override: saveFolderOverride,
+                systemLocation: SaveFolder.systemLocation(),
+                home: FileManager.default.homeDirectoryForCurrentUser
+            ) { url in
+                var isDirectory: ObjCBool = false
+                return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                    && isDirectory.boolValue
+            }
+        }
+        set { saveFolderOverride = newValue }
     }
 
     /// Put every screenshot on the clipboard as soon as it is taken, and again after markup. Default: on.
@@ -41,8 +63,7 @@ public final class CaptureSettings {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         hideDesktopIcons = defaults.bool(forKey: Keys.hideDesktopIcons)
-        saveFolder = defaults.string(forKey: Keys.saveFolder).map { URL(filePath: $0, directoryHint: .isDirectory) }
-            ?? URL.desktopDirectory
+        saveFolderOverride = defaults.string(forKey: Keys.saveFolder).map { URL(filePath: $0, directoryHint: .isDirectory) }
         copyToClipboard = defaults.object(forKey: Keys.copyToClipboard) as? Bool ?? true
         editAfterCapture = defaults.bool(forKey: Keys.editAfterCapture)
         autoCloseSeconds = defaults.double(forKey: Keys.autoCloseSeconds)

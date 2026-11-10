@@ -138,8 +138,9 @@ video editor.
 - Recording cards show the duration, an MP4/GIF switch on hover, and Trim in
   the bottom-left corner (`⌘E` on hover). Pin, markup, OCR, and background are
   for images only.
-- Save puts files on the Desktop, as `Navi 2026-11-06 at 16.10.12.png`.
-  `CaptureSettings.saveFolder` changes it.
+- Save puts files in the macOS screenshot folder (`defaults read com.apple.screencapture location`),
+  as `Navi 2026-11-06 at 16.10.12.png`, or on the Desktop when that folder is missing.
+  Navi's `capture.saveFolder` key overrides both (`CaptureSettings.saveFolder`).
 - Edit after capture (`CaptureSettings.editAfterCapture`, off by default; menu
   toggle "Edit Screenshots Before Copying"): after an area shot (`⇧⌘4`, or
   Capture in the `⇧⌘5` bar, no timer), the frozen screen stays dimmed and the
