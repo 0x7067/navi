@@ -56,7 +56,9 @@ final class AnnotateModel {
         didSet { syncStyleToSelection() }
     }
     private(set) var cropRect: CGRect?
-    var textEdit: TextEdit?
+    var textEdit: TextEdit? {
+        didSet { render() }
+    }
     private(set) var rendered: CGImage?
 
     private var undoStack = UndoStack<Snapshot>()
@@ -383,9 +385,27 @@ final class AnnotateModel {
         render()
     }
 
+    /// The text being typed, drawn by the same renderer as finished text, so it looks the same
+    /// before and after the box closes. Nil while the box is empty.
+    var textPreview: Annotation? {
+        guard let edit = textEdit, !edit.text.isEmpty else { return nil }
+        let original = edit.id.flatMap { id in document.annotations.first { $0.id == id } }
+        return Annotation(
+            kind: .text, start: edit.point, end: edit.point, color: original?.color ?? color, lineWidth: 0,
+            text: edit.text, fontSize: original?.fontSize ?? fontSize
+        )
+    }
+
+    /// Font size, in image pixels, of the text being typed.
+    var textEditFontSize: Double {
+        let original = textEdit?.id.flatMap { id in document.annotations.first { $0.id == id } }
+        return original?.fontSize ?? fontSize
+    }
+
     private func render() {
         var marks = document.annotations
         if let editing = textEdit?.id { marks.removeAll { $0.id == editing } }
+        if let preview = textPreview { marks.append(preview) }
         if let draft { marks.append(draft) }
         rendered = renderer.render(base: base, marks: marks)
     }

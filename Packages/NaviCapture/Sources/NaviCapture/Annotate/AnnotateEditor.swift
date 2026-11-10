@@ -360,20 +360,25 @@ struct AnnotateView: View {
         }
     }
 
+    /// The typing box. Its own text is invisible: the canvas draws the typed text with the same
+    /// renderer as finished text, so nothing changes (font, outline, place) when the box closes.
+    /// The field only supplies the caret, keys, and the outline.
     private func textField(fit: CGFloat) -> some View {
         let point = model.textEdit?.point ?? .zero
-        let fontSize = (8 + model.strokeSize.rawValue * 3) * model.scale * fit
-        return TextField("Type", text: Binding(
+        let fontSize = model.textEditFontSize * fit
+        let color = Color(.sRGB, red: model.color.red, green: model.color.green, blue: model.color.blue)
+        return TextField("", text: Binding(
             get: { model.textEdit?.text ?? "" },
             set: { model.textEdit?.text = $0 }
         ), axis: .vertical)
             .textFieldStyle(.plain)
             .focused($isTyping)
-            .font(.system(size: max(12, fontSize), weight: .bold))
-            .foregroundStyle(Color(.sRGB, red: model.color.red, green: model.color.green, blue: model.color.blue))
+            .font(.system(size: fontSize, weight: .bold))
+            .foregroundStyle(.clear)
+            .tint(color)
             .frame(minWidth: 120, maxWidth: 400, alignment: .leading)
-            .padding(2)
-            .background(RoundedRectangle(cornerRadius: 3).stroke(Color.accentColor, lineWidth: 1))
+            // The outline sits outside the text, so the text starts exactly at the mark's point.
+            .background(RoundedRectangle(cornerRadius: 3).stroke(Color.accentColor, lineWidth: 1).padding(-3))
             .offset(x: point.x * fit, y: point.y * fit)
             .onSubmit(model.finishText)
     }

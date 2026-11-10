@@ -84,4 +84,19 @@ import Testing
         #expect(AnnotationTool.forShortcut("z") == nil)
         #expect(AnnotationTool.forShortcut("ab") == nil)
     }
+
+    /// The text must not change look when the box closes: the preview while typing is the same
+    /// mark that gets saved.
+    @Test func typedTextLooksTheSameBeforeAndAfterCommit() throws {
+        let model = try makeModel()
+        type("Same", at: CGPoint(x: 40, y: 60), in: model)
+        let preview = try #require(model.textPreview)
+        model.finishText()
+        let saved = try #require(model.document.annotations.last)
+        #expect(saved.start == preview.start)
+        #expect(saved.fontSize == preview.fontSize)
+        #expect(saved.color == preview.color)
+        #expect(saved.text == preview.text)
+        #expect(model.textPreview == nil)
+    }
 }
