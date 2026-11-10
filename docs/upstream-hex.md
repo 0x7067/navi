@@ -30,6 +30,7 @@ features into `Packages/NaviDictation` and checks them with the benchmark.
 | Vocabulary | Vocabulary biasing for Parakeet (`docs/features/vocabulary.md`, Labs) | None |
 | Spoken punctuation, formatting | Labs, Output group (`docs/features/labs.md`) | None |
 | Live text | Words beside the HUD while you talk (Labs) | None |
+| Microphone | Keep ready (stream open, 450 ms pre-roll) or Release when idle; 200 ms release tail (`docs/features/dictation.md`, Warm And Cold Capture) | "Keep Microphone Ready" (off by default; then the mic is set up but off until the press, like Wispr Flow), 450 ms pre-roll, 200 ms tail (`AudioCapture.swift`) |
 | Shortcut | Option by default. Hold, toggle, double-tap; Fn/Globe, keys, mouse buttons | Hold fn, double-tap fn to lock |
 | Meetings | Call detection, recording, transcripts, chapters, notes | None |
 | CLI | `hex dictation start/stop/toggle`, `hex paste-last`, transcript CLI | None |

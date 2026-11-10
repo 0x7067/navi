@@ -38,8 +38,8 @@ mkdir -p "$out"
 cp dist/Navi.zip "$out/Navi.zip"
 print -r -- "<p>$notes</p>" > "$out/Navi.html"   # generate_appcast uses this as the release notes
 xcodegen generate >/dev/null
-xcodebuild -resolvePackageDependencies -project Navi.xcodeproj -scheme Navi -derivedDataPath build -quiet
-build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
+xcodebuild -resolvePackageDependencies -project Navi.xcodeproj -scheme Navi -derivedDataPath build.noindex -quiet
+build.noindex/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
   --download-url-prefix "https://github.com/$repo/releases/download/$tag/" \
   --embed-release-notes "$out"
 

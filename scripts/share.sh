@@ -10,7 +10,7 @@ set -euo pipefail
 root=${0:A:h:h}
 cd "$root"
 team=77SAW76597
-work="$root/build/share"
+work="$root/build.noindex/share"
 archive="$work/Navi.xcarchive"
 dist="$root/dist"
 

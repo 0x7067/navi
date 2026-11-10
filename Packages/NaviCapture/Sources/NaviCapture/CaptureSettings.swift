@@ -44,6 +44,12 @@ public final class CaptureSettings {
         didSet { defaults.set(copyToClipboard, forKey: Keys.copyToClipboard) }
     }
 
+    /// After an area shot, stay on the frozen screen and mark up the area in place. Return copies
+    /// it to the clipboard and adds it to the history; no corner card. Default: off.
+    public var editAfterCapture: Bool {
+        didSet { defaults.set(editAfterCapture, forKey: Keys.editAfterCapture) }
+    }
+
     /// Seconds before a corner card closes on its own. 0 means never.
     public var autoCloseSeconds: Double {
         didSet { defaults.set(autoCloseSeconds, forKey: Keys.autoCloseSeconds) }
@@ -59,6 +65,7 @@ public final class CaptureSettings {
         hideDesktopIcons = defaults.bool(forKey: Keys.hideDesktopIcons)
         saveFolderOverride = defaults.string(forKey: Keys.saveFolder).map { URL(filePath: $0, directoryHint: .isDirectory) }
         copyToClipboard = defaults.object(forKey: Keys.copyToClipboard) as? Bool ?? true
+        editAfterCapture = defaults.bool(forKey: Keys.editAfterCapture)
         autoCloseSeconds = defaults.double(forKey: Keys.autoCloseSeconds)
         useNaviScreenshotKeys = defaults.object(forKey: Keys.useNaviScreenshotKeys) as? Bool
     }
@@ -67,6 +74,7 @@ public final class CaptureSettings {
         static let hideDesktopIcons = "capture.hideDesktopIcons"
         static let saveFolder = "capture.saveFolder"
         static let copyToClipboard = "capture.copyToClipboard"
+        static let editAfterCapture = "capture.editAfterCapture"
         static let autoCloseSeconds = "capture.autoCloseSeconds"
         static let useNaviScreenshotKeys = "capture.useNaviScreenshotKeys"
     }

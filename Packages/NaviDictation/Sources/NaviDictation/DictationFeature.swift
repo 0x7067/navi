@@ -26,11 +26,13 @@ import os
 @MainActor
 public final class DictationFeature {
     private static let enabledKey = "dictation.enabled"
-    private static let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Dictation")
+    private static let keepReadyKey = "dictation.keepMicrophoneReady"
+    nonisolated private static let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Dictation")
 
     private let inbox: Inbox
     private let pill = DictationPill()
     private let cleaner = TextCleaner()
+    private let microphone = Microphone()
     private var monitor: FnKeyMonitor?
     private var session: Session?
     private var isProcessing = false
@@ -47,6 +49,19 @@ public final class DictationFeature {
         set {
             UserDefaults.standard.set(newValue, forKey: Self.enabledKey)
             if isStarted { newValue ? attachMonitor() : detachMonitor() }
+            updateMicrophone()
+        }
+    }
+
+    /// Hex's "Keep ready" mode: the microphone stays open between dictations, so a press records at
+    /// once, including the moment just before it. macOS shows the microphone indicator while it is on.
+    /// Off (the default, like Wispr Flow): the microphone is set up ahead of time and starts on each
+    /// press, with no indicator in between. Saved; starts as `false`.
+    public var keepsMicrophoneReady: Bool {
+        get { UserDefaults.standard.object(forKey: Self.keepReadyKey) as? Bool ?? false }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.keepReadyKey)
+            updateMicrophone()
         }
     }
 
@@ -61,13 +76,43 @@ public final class DictationFeature {
     public func start() {
         isStarted = true
         SpeechEngines.warmUpParakeet()
+        TextCleaner.prewarm()
         if isEnabled { attachMonitor() }
+        updateMicrophone()
     }
 
     /// Stops listening and drops a session that is running. Does not give back the fn key.
     public func stop() {
         isStarted = false
         detachMonitor()
+        microphone.close()
+    }
+
+    /// Keeps the microphone in the right state between dictations: open (Keep ready), set up but off
+    /// (warm, the default), or taken down (talk to type off, or no Microphone permission).
+    private func updateMicrophone() {
+        let microphone = microphone
+        let usable = isStarted && isEnabled && DictationPermissions.microphone == .granted
+        guard session == nil, !isProcessing else { return }
+        guard usable else {
+            microphone.close()
+            return
+        }
+        if keepsMicrophoneReady {
+            guard !microphone.isRunning else { return }
+            Task.detached(priority: .userInitiated) {
+                do { try microphone.open() } catch {
+                    Self.logger.error("Could not keep the microphone ready: \(error.localizedDescription)")
+                }
+            }
+        } else {
+            microphone.pause()
+            Task.detached(priority: .utility) {
+                do { try microphone.prepare() } catch {
+                    Self.logger.error("Could not set up the microphone: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     // MARK: fn key setting
@@ -117,10 +162,9 @@ public final class DictationFeature {
 
     /// One run of listening: the mic, the audio stream, and the speech task.
     private struct Session {
-        let capture: AudioCapture
-        let audio: AsyncStream<AudioChunk>.Continuation
+        let id = UUID()
         let transcription: Task<String, any Error>
-        let meter: LevelMeter
+        let pressedAt: ContinuousClock.Instant
         let sourceApp: String?
         let sourceBundleID: String?
     }
@@ -140,30 +184,52 @@ public final class DictationFeature {
             return
         }
 
-        let (stream, continuation) = AsyncStream<AudioChunk>.makeStream()
-        let meter = LevelMeter()
-        let capture = AudioCapture()
-        do {
-            try capture.start(into: continuation) { meter.update($0) }
-        } catch {
-            continuation.finish()
-            Self.logger.error("Could not start the microphone: \(error.localizedDescription)")
-            monitor?.reset()
-            onProblem?("Navi could not start the microphone.")
-            return
-        }
+        // The pill first, so the press feels instant. The rest catches up behind it.
+        pill.show()
+        startLevelTimer()
+        TextCleaner.prewarm()
 
+        let (stream, continuation) = AsyncStream<AudioChunk>.makeStream()
         let transcription = Task.detached { () -> String in
             let engine = await SpeechEngines.best()
             return try await engine.transcribe(audio: stream)
         }
         let app = NSWorkspace.shared.frontmostApplication
-        session = Session(
-            capture: capture, audio: continuation, transcription: transcription, meter: meter,
+        let session = Session(
+            transcription: transcription, pressedAt: .now,
             sourceApp: app?.localizedName, sourceBundleID: app?.bundleIdentifier
         )
-        pill.show()
-        startLevelTimer(meter: meter)
+        self.session = session
+
+        let microphone = microphone
+        if microphone.isRunning {
+            // Keep ready: recording already runs, with the moment before the press.
+            microphone.beginCapture(into: continuation, includePreRoll: true)
+            return
+        }
+        // Release when idle (or not ready yet): open the microphone off the main thread.
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                try microphone.open()
+            } catch {
+                await MainActor.run {
+                    Self.logger.error("Could not start the microphone: \(error.localizedDescription)")
+                    continuation.finish()
+                    self?.cancelSession()
+                    self?.onProblem?("Navi could not start the microphone.")
+                }
+                return
+            }
+            await MainActor.run {
+                // Released before the microphone was ready: nothing to record (like Hex).
+                guard let self, self.session?.id == session.id else {
+                    continuation.finish()
+                    return
+                }
+                microphone.beginCapture(into: continuation, includePreRoll: false)
+                Self.logger.info("Microphone ready \((ContinuousClock.now - session.pressedAt).milliseconds) ms after the press")
+            }
+        }
     }
 
     private func lock() {
@@ -171,16 +237,23 @@ public final class DictationFeature {
         pill.model.isLocked = true
     }
 
-    /// The user is done talking: stop the mic, clean up the text, and type it.
+    /// The user is done talking: keep the last 200 ms, stop the capture, clean up the text, and type it.
     private func commit() {
         guard let session else { return }
         self.session = nil
-        stopListening(session)
+        levelTimer?.invalidate()
+        levelTimer = nil
         pill.model.phase = .thinking
         isProcessing = true
+        let released = ContinuousClock.now
 
         Task {
-            defer { isProcessing = false }
+            defer {
+                isProcessing = false
+                updateMicrophone()
+            }
+            try? await Task.sleep(for: Microphone.releaseTail)
+            microphone.endCapture()
             let raw: String
             do {
                 raw = try await session.transcription.value
@@ -188,8 +261,12 @@ public final class DictationFeature {
                 Self.logger.error("Speech failed: \(error.localizedDescription)")
                 raw = ""
             }
+            let heard = ContinuousClock.now
             let text = await cleaner.clean(raw)
             pill.hide()
+            Self.logger.info(
+                "Release to text: \((ContinuousClock.now - released).milliseconds) ms (speech \((heard - released).milliseconds) ms, cleanup \((ContinuousClock.now - heard).milliseconds) ms)"
+            )
             guard !text.isEmpty else { return }
             guard TextInserter.hasAccessibility else {
                 TextInserter.requestAccessibility()
@@ -210,27 +287,22 @@ public final class DictationFeature {
             return
         }
         self.session = nil
-        stopListening(session)
-        session.transcription.cancel()
-        pill.hide()
-    }
-
-    private func stopListening(_ session: Session) {
         levelTimer?.invalidate()
         levelTimer = nil
-        session.capture.stop()
-        session.audio.finish()
-        session.meter.reset()
+        microphone.endCapture()
+        session.transcription.cancel()
+        pill.hide()
+        updateMicrophone()
     }
 
-    private func startLevelTimer(meter: LevelMeter) {
+    private func startLevelTimer() {
         levelTimer?.invalidate()
+        let microphone = microphone
         levelTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            let level = meter.level
+            let level = microphone.level
             MainActor.assumeIsolated { self?.pill.model.push(level: level) }
         }
     }
-
     private func askForPermissions() {
         monitor?.reset()
         Task {
@@ -249,4 +321,8 @@ extension TextInserter {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }
+}
+
+private extension Duration {
+    var milliseconds: Int { Int(components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000) }
 }
