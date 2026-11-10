@@ -52,6 +52,11 @@ final class NaviMenu: NSObject, NSMenuDelegate {
         menu.addItem(item("Talk to Type (Hold fn)", on: app.dictation.isEnabled) { [app] in
             app.setTalkToType(!app.dictation.isEnabled)
         })
+        if app.dictation.isEnabled {
+            menu.addItem(item("Keep Microphone Ready", on: app.dictation.keepsMicrophoneReady) { [app] in
+                app.dictation.keepsMicrophoneReady.toggle()
+            })
+        }
         menu.addItem(.separator())
         menu.addItem(item("Close All Cards") { capture.closeAllCards() })
         if capture.hasPins {

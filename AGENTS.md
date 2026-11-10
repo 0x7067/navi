@@ -55,7 +55,14 @@ Desktop Icons). Not checked yet: the `⌥⇧⌘N` menu and a second display.
   `SpeechAnalyzer` or `SFSpeechRecognizer` until the Parakeet model is loaded.
   The model, about 0.5 GB, downloads on first start to
   `~/Library/Application Support/FluidAudio/Models`), cleanup with Foundation Models or rules, paste at the
-  cursor, then the old clipboard comes back. fn with another key (fn+⌫,
+  cursor, then the old clipboard comes back. Speed: the pill shows on the
+  press. By default (like Wispr Flow) the mic is set up ahead of time but off,
+  so there is no mic dot between dictations; a press only starts it. "Keep
+  Microphone Ready" (menu, off by default; Hex's "Keep ready") keeps the mic
+  open with a 450 ms pre-roll, so a press records at once (macOS shows the mic
+  dot). Recording runs 200 ms past the release so
+  the last word is kept. The cleanup model session is pre-warmed. Timings log
+  under the `Dictation` category ("Release to text: … ms"). fn with another key (fn+⌫,
   fn+arrows) never dictates. The first launch asks before it uses fn. When on,
   Navi borrows the fn key setting (`AppleFnUsageType` = 0, "Do Nothing", applied
   with `activateSettings -u`) while it runs and puts it back on quit.
