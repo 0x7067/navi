@@ -11,7 +11,7 @@ A macOS menu bar app for capture. It combines four tools:
 
 The main idea: every capture (clip, screenshot, recording, GIF, dictated text,
 OCR text) goes to one place. It shows first as a corner card, then in one shared
-history list. `⇧⌘V` opens that list.
+history list. `⇧⌘V` opens that list. The user can change it in the Navi menu.
 
 ## Plan
 

@@ -33,33 +33,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     #endif
     lazy var dictation = DictationFeature(inbox: inbox)
+    private let historyStore = HistoryShortcutStore(defaults: .standard)
+    /// The shortcut that opens the history. The user can change it from the menu.
+    private(set) lazy var historyShortcut: KeyCombo = historyStore.load()
     private var historyHotKey: HotKey?
     private var menuHotKey: HotKey?
     private var extraHotKeys: [HotKey] = []
-    private lazy var naviMenu = NaviMenu(app: self)
     private var screenshotHotKeys: [HotKey] = []
+    private lazy var naviMenu = NaviMenu(app: self)
+    private lazy var shortcutRecorder = HistoryShortcutRecorder(
+        apply: { [weak self] in self?.setHistoryShortcut($0) ?? .refused },
+        onClose: { [weak self] in self?.resumeHotKeys() }
+    )
     private var signalSources: [any DispatchSourceSignal] = []
     private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "App")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         clipboard.start()
         _ = naviMenu
-        historyHotKey = register("⇧⌘V", keyCode: kVK_ANSI_V) { [weak self] in self?.clipboard.togglePanel() }
-        extraHotKeys = [
-            register("⌥⇧⌘T", keyCode: kVK_ANSI_T, modifiers: cmdKey | shiftKey | optionKey) { [weak self] in
-                self?.capture.captureText()
-            },
-            register("⌥⇧⌘4", keyCode: kVK_ANSI_4, modifiers: cmdKey | shiftKey | optionKey) { [weak self] in
-                self?.capture.captureScrolling()
-            },
-            register("⌥⇧⌘5", keyCode: kVK_ANSI_5, modifiers: cmdKey | shiftKey | optionKey) { [weak self] in
-                guard let self else { return }
-                recording.isRecording ? recording.stop() : capture.pickRecordingRegion()
-            },
-        ].compactMap(\.self)
-        menuHotKey = register("⌥⇧⌘N", keyCode: kVK_ANSI_N, modifiers: cmdKey | shiftKey | optionKey) { [weak self] in
-            self?.naviMenu.popUpAtMouse()
-        }
+        registerHotKeys()
         quitCleanlyOnSignals()
         wireRecording()
         dictation.onProblem = { CaptureFeature.showMessage($0) }
@@ -134,6 +126,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Registers every Navi shortcut from its current combo. Starts by unregistering, so calling it again is safe.
+    private func registerHotKeys() {
+        unregisterHotKeys()
+        historyHotKey = makeHistoryHotKey(historyShortcut)
+        menuHotKey = register("Navi Menu", NaviHotKeys.menu) { [weak self] in self?.naviMenu.popUpAtMouse() }
+        extraHotKeys = [
+            register("Capture Text", NaviHotKeys.captureText) { [weak self] in self?.capture.captureText() },
+            register("Scrolling Capture", NaviHotKeys.scrollingCapture) { [weak self] in
+                self?.capture.captureScrolling()
+            },
+            register("Record Screen", NaviHotKeys.record) { [weak self] in
+                guard let self else { return }
+                recording.isRecording ? recording.stop() : capture.pickRecordingRegion()
+            },
+        ].compactMap(\.self)
+        if capture.settings.useNaviScreenshotKeys == true {
+            screenshotHotKeys = makeScreenshotHotKeys()
+        }
+    }
+
+    private func unregisterHotKeys() {
+        historyHotKey?.unregister()
+        menuHotKey?.unregister()
+        for hotKey in extraHotKeys + screenshotHotKeys { hotKey.unregister() }
+        historyHotKey = nil
+        menuHotKey = nil
+        extraHotKeys = []
+        screenshotHotKeys = []
+    }
+
+    /// Turns off every Navi shortcut, so the recorder receives the keys. Paired with `resumeHotKeys`.
+    func suspendHotKeys() {
+        unregisterHotKeys()
+    }
+
+    /// Turns Navi's shortcuts back on after `suspendHotKeys`, with the current combos.
+    func resumeHotKeys() {
+        registerHotKeys()
+    }
+
+    /// Opens the recorder. Navi's shortcuts are off while it is open.
+    func changeHistoryShortcut() {
+        suspendHotKeys()
+        shortcutRecorder.show(current: historyShortcut)
+    }
+
+    /// Changes the History shortcut. It must not clash with Navi's other shortcuts, and macOS or another app
+    /// must accept it. If macOS refuses, the old shortcut comes back. The change is saved only when applied.
+    func setHistoryShortcut(_ combo: KeyCombo) -> HistoryShortcutChange {
+        if let error = combo.validate(reserved: NaviHotKeys.reserved) { return .invalid(error) }
+        // While the recorder has the shortcuts suspended there is no History hotkey to restore.
+        let wasRegistered = historyHotKey != nil
+        historyHotKey?.unregister()
+        historyHotKey = nil
+        guard let hotKey = makeHistoryHotKey(combo) else {
+            if wasRegistered { historyHotKey = makeHistoryHotKey(historyShortcut) }
+            return .refused
+        }
+        historyHotKey = hotKey
+        historyShortcut = combo
+        if combo == .defaultHistory {
+            historyStore.reset()
+        } else {
+            historyStore.save(combo)
+        }
+        return .applied
+    }
+
+    private func makeHistoryHotKey(_ combo: KeyCombo) -> HotKey? {
+        register("History", combo) { [weak self] in self?.clipboard.togglePanel() }
+    }
+
     /// Turns Navi's screenshot keys (⇧⌘3, ⇧⌘4, ⇧⌘5, ⌃⇧⌘3, ⌃⇧⌘4) on or off. On: the macOS screenshot keys are off while Navi runs.
     func setUseNaviScreenshotKeys(_ use: Bool) {
         capture.settings.useNaviScreenshotKeys = use
@@ -144,14 +208,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         SystemScreenshotShortcuts.takeOver()
-        screenshotHotKeys = [
-            register("⇧⌘3", keyCode: kVK_ANSI_3) { [weak self] in self?.capture.captureFullscreen() },
-            register("⇧⌘4", keyCode: kVK_ANSI_4) { [weak self] in self?.capture.captureArea() },
-            register("⇧⌘5", keyCode: kVK_ANSI_5) { [weak self] in self?.capture.captureAllInOne() },
-            register("⌃⇧⌘3", keyCode: kVK_ANSI_3, modifiers: cmdKey | shiftKey | controlKey) { [weak self] in
+        screenshotHotKeys = makeScreenshotHotKeys()
+    }
+
+    private func makeScreenshotHotKeys() -> [HotKey] {
+        [
+            register("Capture Fullscreen", NaviHotKeys.fullscreen) { [weak self] in self?.capture.captureFullscreen() },
+            register("Capture Area", NaviHotKeys.area) { [weak self] in self?.capture.captureArea() },
+            register("All-in-One", NaviHotKeys.allInOne) { [weak self] in self?.capture.captureAllInOne() },
+            register("Capture Fullscreen to Clipboard", NaviHotKeys.fullscreenToClipboard) { [weak self] in
                 self?.capture.captureFullscreenToClipboard()
             },
-            register("⌃⇧⌘4", keyCode: kVK_ANSI_4, modifiers: cmdKey | shiftKey | controlKey) { [weak self] in
+            register("Capture Area to Clipboard", NaviHotKeys.areaToClipboard) { [weak self] in
                 self?.capture.captureAreaToClipboard()
             },
         ].compactMap(\.self)
@@ -181,10 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func register(
-        _ name: String, keyCode: Int, modifiers: Int = cmdKey | shiftKey, action: @escaping () -> Void
-    ) -> HotKey? {
-        guard let hotKey = HotKey(keyCode: UInt32(keyCode), modifiers: UInt32(modifiers), action: action) else {
+    private func register(_ name: String, _ combo: KeyCombo, action: @escaping () -> Void) -> HotKey? {
+        guard let hotKey = HotKey(keyCode: combo.keyCode, modifiers: combo.modifiers, action: action) else {
             logger.error("Could not register \(name, privacy: .public). Another app may own it.")
             return nil
         }
