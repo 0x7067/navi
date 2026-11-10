@@ -313,7 +313,7 @@ final class HistoryShortcutRecorder: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Closes the panel and removes the monitor, then runs `onClose`. Safe to call more than once.
+    /// Removes the monitor, runs `onClose`, then closes the panel. Safe to call more than once.
     private func finish(fade: Bool = false) {
         guard let panel else { return }
         self.panel = nil
@@ -321,19 +321,17 @@ final class HistoryShortcutRecorder: NSObject, NSWindowDelegate {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         panel.delegate = nil
-        let close: @MainActor @Sendable () -> Void = { [onClose] in
-            panel.close()
-            onClose()
-        }
+        // Resume before the fade, so a recorder reopened during the fade is not undone by this one.
+        onClose()
         if fade, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.2
                 panel.animator().alphaValue = 0
             } completionHandler: {
-                Task { @MainActor in close() }
+                Task { @MainActor in panel.close() }
             }
         } else {
-            close()
+            panel.close()
         }
     }
 
