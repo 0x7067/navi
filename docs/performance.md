@@ -129,3 +129,19 @@ Spread is run 2 against run 1, on the median. The target is within 15% for every
 - 1,000 items: every scenario but one is within 6%. `thumbnail-draw` moved 18.7% (11.0 ms to 9.0 ms), which misses the target. Two more runs at 1,000 items, not saved, gave 9.76 ms and 9.76 ms, so run 1 looks like an outlier: its p95 was 28.9 ms against 9.1 ms in run 2. The cause is not established. Compare `thumbnail-draw` changes with a fresh pair of runs before trusting a difference under 20%.
 
 No scenario has a median under 0.1 ms, so none is below timer resolution.
+
+## Loading
+
+`Inbox(directory:)` read and decoded `history.json` on the calling thread, 16.4 ms at 5,000 items. The file is now cut at item boundaries and the pieces decode in parallel. The format on disk is unchanged, so existing files load as before.
+
+- Tried and dropped: `Data(contentsOf:options: .mappedIfSafe)` (no gain, 17.1 ms) and `JSONSerialization` with hand-built items (38 ms, slower than `JSONDecoder`).
+- Kept: files of 512 KB and up are split at `},{"`, which only ever sits between two items because quotes inside strings are escaped. Each piece decodes on its own core. A file that is not in `JSONEncoder`'s compact form, or a piece that fails, falls back to one plain decode.
+- Runs: `2026-11-10T23.34.31-aba62bf.json` and `2026-11-10T23.34.38-aba62bf.json`. Other scenarios did not change.
+
+| Size | Load median before (ms) | p95 before (ms) | Load median after (ms) | p95 after (ms) |
+|---|---:|---:|---:|---:|
+| 200 | 0.647 | 0.660 | 0.665 | 0.690 |
+| 1,000 | 3.172 | 3.216 | 1.127 | 1.177 |
+| 5,000 | 16.365 | 16.676 | 5.345 | 5.519 |
+
+Before is an unsaved run on the same machine just before the change. The second saved run measured 6.0 ms median and 6.2 ms p95 at 5,000.
