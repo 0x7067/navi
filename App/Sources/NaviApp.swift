@@ -158,12 +158,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Turns off every Navi shortcut, so the recorder receives the keys. Paired with `resumeHotKeys`.
     func suspendHotKeys() {
+        logger.info("Navi shortcuts suspended")
         unregisterHotKeys()
     }
 
-    /// Turns Navi's shortcuts back on after `suspendHotKeys`, with the current combos.
+    /// Turns Navi's shortcuts back on after `suspendHotKeys`, with the current combos. Waits one turn of the
+    /// run loop, so a shortcut the user just typed is no longer being handled when Carbon registers it again.
     func resumeHotKeys() {
-        registerHotKeys()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            registerHotKeys()
+            logger.info("Navi shortcuts resumed, History on \(self.historyShortcut.display, privacy: .public)")
+        }
     }
 
     /// Opens the recorder. Navi's shortcuts are off while it is open.
@@ -176,7 +182,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// must accept it. If macOS refuses, the old shortcut comes back. The change is saved only when applied.
     func setHistoryShortcut(_ combo: KeyCombo) -> HistoryShortcutChange {
         if let error = combo.validate(reserved: NaviHotKeys.reserved) { return .invalid(error) }
-        // While the recorder has the shortcuts suspended there is no History hotkey to restore.
         let wasRegistered = historyHotKey != nil
         historyHotKey?.unregister()
         historyHotKey = nil
@@ -184,7 +189,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if wasRegistered { historyHotKey = makeHistoryHotKey(historyShortcut) }
             return .refused
         }
-        historyHotKey = hotKey
+        // While the recorder has the shortcuts suspended, the hot key was only a probe: `resumeHotKeys`
+        // registers the real one once, after the recorder closes.
+        if wasRegistered { historyHotKey = hotKey } else { hotKey.unregister() }
         historyShortcut = combo
         if combo == .defaultHistory {
             historyStore.reset()
