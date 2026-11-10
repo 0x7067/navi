@@ -39,8 +39,21 @@ public enum AnnotationTool: String, CaseIterable, Codable, Sendable {
         case .counter: "1.circle"
         case .blur: "drop"
         case .pixelate: "squareshape.split.3x3"
-        case .spotlight: "flashlight.on.fill"
+        case .spotlight: "camera.metering.spot"
         case .crop: "crop"
+        }
+    }
+
+    /// The tooltip: the name, and what the tool does when that is not clear from the name.
+    var help: String {
+        switch self {
+        case .select: "Select: click a mark to move it, drag its handles to resize it"
+        case .counter: "Counter: click to add numbered steps"
+        case .blur: "Blur: hide what is in the box"
+        case .pixelate: "Pixelate: hide what is in the box with big pixels"
+        case .spotlight: "Spotlight: darken everything outside the box"
+        case .highlighter: "Highlighter: see-through marker"
+        default: title
         }
     }
 
@@ -54,7 +67,7 @@ public enum AnnotationTool: String, CaseIterable, Codable, Sendable {
 }
 
 /// A color that can be saved.
-public struct RGBA: Codable, Equatable, Sendable {
+public struct RGBA: Codable, Hashable, Sendable {
     public var red, green, blue, alpha: Double
 
     public init(red: Double, green: Double, blue: Double, alpha: Double = 1) {
@@ -112,6 +125,101 @@ public struct Annotation: Codable, Identifiable, Equatable, Sendable {
             return CaptureGeometry.rect(from: start, to: end).insetBy(dx: -lineWidth / 2, dy: -lineWidth / 2)
         }
     }
+
+    /// A part of a mark you can drag to resize it.
+    public enum Handle: CaseIterable, Sendable {
+        /// The two ends of a line, or two corners of a box.
+        case start, end
+        /// The two other corners of a box: (start.x, end.y) and (end.x, start.y).
+        case startXEndY, endXStartY
+        /// The four edges of a box. Grab anywhere along the edge.
+        case top, bottom, left, right
+
+        public var isEdge: Bool {
+            switch self {
+            case .top, .bottom, .left, .right: true
+            default: false
+            }
+        }
+    }
+
+    /// Kinds that are a box between `start` and `end`.
+    public var isBox: Bool {
+        switch kind {
+        case .rectangle, .filledRectangle, .ellipse, .blur, .pixelate, .spotlight, .image: true
+        default: false
+        }
+    }
+
+    /// Handles for this mark. Lines and arrows have their two ends; boxes have four corners and four edges.
+    /// Freehand marks, text, and counters have none (they move, and the size picker changes them).
+    public var handles: [Handle] {
+        if isBox { return Handle.allCases }
+        if kind == .arrow || kind == .line { return [.start, .end] }
+        return []
+    }
+
+    /// The box of a box mark, as drawn.
+    public var box: CGRect { CaptureGeometry.rect(from: start, to: end) }
+
+    /// Where a handle is drawn. Edges are drawn at their middle.
+    public func point(of handle: Handle) -> CGPoint {
+        switch handle {
+        case .start: start
+        case .end: end
+        case .startXEndY: CGPoint(x: start.x, y: end.y)
+        case .endXStartY: CGPoint(x: end.x, y: start.y)
+        case .top: CGPoint(x: box.midX, y: box.minY)
+        case .bottom: CGPoint(x: box.midX, y: box.maxY)
+        case .left: CGPoint(x: box.minX, y: box.midY)
+        case .right: CGPoint(x: box.maxX, y: box.midY)
+        }
+    }
+
+    /// The handle within `tolerance` of `point`, if any. Corners and ends win over edges.
+    public func handle(at point: CGPoint, tolerance: Double) -> Handle? {
+        let corner = handles.filter { !$0.isEdge }.first {
+            hypot(self.point(of: $0).x - point.x, self.point(of: $0).y - point.y) <= tolerance
+        }
+        if let corner { return corner }
+        guard isBox else { return nil }
+        let r = box
+        let alongX = point.x >= r.minX - tolerance && point.x <= r.maxX + tolerance
+        let alongY = point.y >= r.minY - tolerance && point.y <= r.maxY + tolerance
+        if alongY, abs(point.x - r.minX) <= tolerance { return .left }
+        if alongY, abs(point.x - r.maxX) <= tolerance { return .right }
+        if alongX, abs(point.y - r.minY) <= tolerance { return .top }
+        if alongX, abs(point.y - r.maxY) <= tolerance { return .bottom }
+        return nil
+    }
+
+    /// The same mark with `handle` moved to `point`. The opposite corner, end, or edge stays put.
+    public func resized(_ handle: Handle, to point: CGPoint) -> Annotation {
+        var copy = self
+        if handle.isEdge {
+            // Edges work on the box with `start` at the top left.
+            copy.start = CGPoint(x: box.minX, y: box.minY)
+            copy.end = CGPoint(x: box.maxX, y: box.maxY)
+        }
+        switch handle {
+        case .start: copy.start = point
+        case .end: copy.end = point
+        case .startXEndY:
+            copy.start.x = point.x
+            copy.end.y = point.y
+        case .endXStartY:
+            copy.end.x = point.x
+            copy.start.y = point.y
+        case .top: copy.start.y = point.y
+        case .bottom: copy.end.y = point.y
+        case .left: copy.start.x = point.x
+        case .right: copy.end.x = point.x
+        }
+        return copy
+    }
+
+    /// Text and counters grow with the size picker; everything else gets a thicker line.
+    public var usesFontSize: Bool { kind == .text || kind == .counter }
 
     /// The same mark moved by `offset`.
     public func moved(by offset: CGVector) -> Annotation {

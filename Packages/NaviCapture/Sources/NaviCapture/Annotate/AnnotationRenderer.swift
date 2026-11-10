@@ -37,7 +37,12 @@ final class AnnotationRenderer {
         if !spots.isEmpty {
             context.saveGState()
             context.addRect(full)
-            for spot in spots { context.addEllipse(in: CaptureGeometry.rect(from: spot.start, to: spot.end)) }
+            // A rounded box, like the plan's prototype.
+            for spot in spots {
+                let rect = CaptureGeometry.rect(from: spot.start, to: spot.end)
+                let radius = min(12 * CGFloat(spot.lineWidth) / 4, rect.width / 2, rect.height / 2)
+                context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            }
             context.setFillColor(CGColor(gray: 0, alpha: 0.55))
             context.fillPath(using: .evenOdd)
             context.restoreGState()
@@ -48,14 +53,41 @@ final class AnnotationRenderer {
         NSGraphicsContext.current = graphics
         for mark in marks { draw(mark, context: context) }
         if let selection, let mark = marks.first(where: { $0.id == selection }) {
-            context.setStrokeColor(CGColor(srgbRed: 0.2, green: 0.55, blue: 1, alpha: 1))
-            context.setLineWidth(max(2, CGFloat(width) / 800))
-            context.setLineDash(phase: 0, lengths: [8, 6])
-            context.stroke(mark.bounds.insetBy(dx: -6, dy: -6))
-            context.setLineDash(phase: 0, lengths: [])
+            drawSelection(of: mark, imageWidth: CGFloat(width), context: context)
         }
         NSGraphicsContext.restoreGraphicsState()
         return context.makeImage()
+    }
+
+    // MARK: Selection
+
+    /// A dashed outline (on the box itself for box marks, so you grab what you see) and
+    /// white handles with a blue ring: big ones at corners and ends, small ones at edge middles.
+    private func drawSelection(of mark: Annotation, imageWidth: CGFloat, context: CGContext) {
+        let blue = CGColor(srgbRed: 0.2, green: 0.55, blue: 1, alpha: 1)
+        let line = max(2, imageWidth / 800)
+        context.saveGState()
+        context.setLineWidth(line)
+        // White under blue, so the dashes show on dark and light images.
+        context.setStrokeColor(.white)
+        let outline = mark.isBox ? mark.box : mark.bounds.insetBy(dx: -6, dy: -6)
+        if mark.kind != .arrow, mark.kind != .line {
+            context.stroke(outline)
+            context.setStrokeColor(blue)
+            context.setLineDash(phase: 0, lengths: [line * 4, line * 3])
+            context.stroke(outline)
+            context.setLineDash(phase: 0, lengths: [])
+        }
+        context.setStrokeColor(blue)
+        for handle in mark.handles {
+            let radius = max(6, imageWidth / 220) * (handle.isEdge ? 0.7 : 1)
+            let center = mark.point(of: handle)
+            let dot = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+            context.setFillColor(.white)
+            context.fillEllipse(in: dot)
+            context.strokeEllipse(in: dot)
+        }
+        context.restoreGState()
     }
 
     // MARK: Marks

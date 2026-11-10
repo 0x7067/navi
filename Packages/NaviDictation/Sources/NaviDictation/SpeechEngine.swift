@@ -14,9 +14,22 @@ protocol SpeechEngine: Sendable {
 enum SpeechEngines {
     private static let logger = Logger(subsystem: "com.donovanhiland.navi", category: "SpeechEngine")
 
-    /// The best on-device engine that is ready now. `SpeechAnalyzer` on macOS 26 and newer when its
-    /// language model is installed. Otherwise `SFSpeechRecognizer` with on-device recognition.
+    /// The best on-device engine that is ready now: Parakeet (like Hex) when its model is loaded.
+    /// Otherwise `SpeechAnalyzer` on macOS 26 and newer when its language model is installed, then
+    /// `SFSpeechRecognizer` with on-device recognition. Asking also starts the Parakeet download.
     static func best() async -> any SpeechEngine {
+        if await ParakeetModel.shared.isLoaded { return ParakeetEngine() }
+        warmUpParakeet()
+        return await apple()
+    }
+
+    /// Downloads (first time) and loads Parakeet in the background.
+    static func warmUpParakeet() {
+        Task.detached(priority: .utility) { try? await ParakeetModel.shared.prepare() }
+    }
+
+    /// Apple's speech engines only.
+    static func apple() async -> any SpeechEngine {
         if #available(macOS 26.0, *), let engine = await AnalyzerEngine.makeIfReady() {
             return engine
         }

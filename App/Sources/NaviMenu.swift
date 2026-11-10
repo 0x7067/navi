@@ -62,7 +62,7 @@ final class NaviMenu: NSObject, NSMenuDelegate {
         menu.addItem(item("Hide Desktop Icons", on: settings.hideDesktopIcons) {
             settings.hideDesktopIcons.toggle()
         })
-        menu.addItem(item("Use Navi for ⇧⌘3, ⇧⌘4, and ⇧⌘5", on: settings.useNaviScreenshotKeys == true) { [app] in
+        menu.addItem(item("Use Navi for Screenshot Keys", on: settings.useNaviScreenshotKeys == true) { [app] in
             app.setUseNaviScreenshotKeys(settings.useNaviScreenshotKeys != true)
         })
         menu.addItem(.separator())
@@ -75,6 +75,7 @@ final class NaviMenu: NSObject, NSMenuDelegate {
             Task { _ = await DictationFeature.requestPermissions() }
         })
         menu.addItem(.separator())
+        menu.addItem(item("Check for Updates…") { [app] in app.updater.checkForUpdates(nil) })
         menu.addItem(item("Quit Navi", key: "q", .command) { NSApp.terminate(nil) })
     }
 

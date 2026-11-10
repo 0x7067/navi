@@ -1,7 +1,8 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// A full-screen selection on frozen screen images, one overlay window per display.
+/// A full-screen selection, one overlay window per display. The overlay shows at once over the live
+/// screen; the frozen screen images arrive a moment later (`freeze`) and are what gets cropped.
 ///
 /// Area mode: drag a box. Edges snap to window edges. A magnifier shows the pixels under the cursor.
 /// Window mode: hover to highlight a window, click to pick it. Space switches modes. Esc cancels.
@@ -42,14 +43,21 @@ final class SelectionSession {
     private var keyMonitor: Any?
     private var completion: ((Outcome) -> Void)?
 
-    init(screens: [(NSScreen, CapturedImage)], mode: Mode, windows: [OnScreenWindow], completion: @escaping (Outcome) -> Void) {
+    init(screens: [NSScreen], mode: Mode, windows: [OnScreenWindow], completion: @escaping (Outcome) -> Void) {
         self.mode = mode
         self.windows = windows
         self.completion = completion
-        overlays = screens.map { screen, captured in
-            OverlayWindow(screen: screen, view: OverlayView(session: nil, screen: screen, captured: captured))
+        overlays = screens.map { screen in
+            OverlayWindow(screen: screen, view: OverlayView(session: nil, screen: screen))
         }
         for overlay in overlays { overlay.overlayView.session = self }
+    }
+
+    /// Gives each overlay its frozen screen image.
+    func freeze(_ images: [(NSScreen, CapturedImage)]) {
+        for (screen, captured) in images {
+            overlays.first { $0.overlayView.screen == screen }?.overlayView.captured = captured
+        }
     }
 
     func begin() {
@@ -131,7 +139,9 @@ final class OverlayWindow: NSWindow {
         super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
         setFrame(screen.frame, display: false)
         level = .screenSaver
-        isOpaque = true
+        // Clear until the frozen image arrives, so the live screen shows through at once.
+        isOpaque = false
+        backgroundColor = .clear
         hasShadow = false
         isReleasedWhenClosed = false
         acceptsMouseMovedEvents = true
@@ -145,7 +155,18 @@ final class OverlayWindow: NSWindow {
 final class OverlayView: NSView {
     weak var session: SelectionSession?
     let screen: NSScreen
-    let captured: CapturedImage
+    /// The frozen screen. Nil for the first moment, while it is being taken.
+    var captured: CapturedImage? {
+        didSet {
+            needsDisplay = true
+            guard captured != nil, let pending = pendingFinish else { return }
+            pendingFinish = nil
+            pending()
+        }
+    }
+
+    /// A selection finished before the frozen image arrived. It runs when the image comes.
+    private var pendingFinish: (() -> Void)?
 
     private var mouse: CGPoint?
     private var dragStart: CGPoint?
@@ -184,10 +205,9 @@ final class OverlayView: NSView {
     }()
     private static let accent = NSColor.systemBlue
 
-    init(session: SelectionSession?, screen: NSScreen, captured: CapturedImage) {
+    init(session: SelectionSession?, screen: NSScreen) {
         self.session = session
         self.screen = screen
-        self.captured = captured
         super.init(frame: CGRect(origin: .zero, size: screen.frame.size))
     }
 
@@ -198,7 +218,10 @@ final class OverlayView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     private var mode: SelectionSession.Mode { session?.mode ?? .area }
-    private var imageSize: CGSize { CGSize(width: captured.image.width, height: captured.image.height) }
+    private var imageSize: CGSize {
+        if let captured { return CGSize(width: captured.image.width, height: captured.image.height) }
+        return CGSize(width: bounds.width * screen.backingScaleFactor, height: bounds.height * screen.backingScaleFactor)
+    }
 
     /// Backup for the session's key monitor: the key overlay also gets the keys directly.
     override func keyDown(with event: NSEvent) {
@@ -272,10 +295,14 @@ final class OverlayView: NSView {
             needsDisplay = true
             return
         }
-        let pixels = CaptureGeometry.pixelRect(forSelection: selection, viewSize: bounds.size, imageSize: imageSize)
-        guard let cropped = captured.image.cropping(to: pixels) else { return }
-        let topLeft = CGRect(x: selection.minX, y: bounds.height - selection.maxY, width: selection.width, height: selection.height)
-        session?.finish(.area(CapturedImage(image: cropped, scale: captured.scale), screen, rect: topLeft))
+        let finish = { [weak self] in
+            guard let self, let captured else { return }
+            let pixels = CaptureGeometry.pixelRect(forSelection: selection, viewSize: bounds.size, imageSize: imageSize)
+            guard let cropped = captured.image.cropping(to: pixels) else { return }
+            let topLeft = CGRect(x: selection.minX, y: bounds.height - selection.maxY, width: selection.width, height: selection.height)
+            session?.finish(.area(CapturedImage(image: cropped, scale: captured.scale), screen, rect: topLeft))
+        }
+        if captured == nil { pendingFinish = finish } else { finish() }
     }
 
     private func location(of event: NSEvent) -> CGPoint {
@@ -317,7 +344,7 @@ final class OverlayView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.interpolationQuality = .high
-        context.draw(captured.image, in: bounds)
+        if let captured { context.draw(captured.image, in: bounds) }
 
         let hole: CGRect? = switch mode {
         case .area: selection
@@ -339,7 +366,7 @@ final class OverlayView: NSView {
                 context.stroke(selection.insetBy(dx: -0.5, dy: -0.5))
                 drawSizeLabel(for: selection)
             }
-            if let mouse { drawMagnifier(at: mouse, in: context) }
+            if let mouse, let captured { drawMagnifier(at: mouse, image: captured.image, in: context) }
         case .window:
             if let hole {
                 context.setFillColor(Self.accent.withAlphaComponent(0.18).cgColor)
@@ -367,7 +394,7 @@ final class OverlayView: NSView {
         drawPill(text, at: CGPoint(x: bounds.midX - size.width / 2, y: bounds.height - 70))
     }
 
-    private func drawMagnifier(at point: CGPoint, in context: CGContext) {
+    private func drawMagnifier(at point: CGPoint, image: CGImage, in context: CGContext) {
         let pixelCount = 15
         let diameter: CGFloat = 120
         let cell = diameter / CGFloat(pixelCount)
@@ -384,7 +411,7 @@ final class OverlayView: NSView {
         context.clip()
         context.setFillColor(NSColor.black.cgColor)
         context.fill(frame)
-        if let crop = captured.image.cropping(to: source) {
+        if let crop = image.cropping(to: source) {
             // `cropping` clips at the image edge. Place the crop so the cursor pixel stays in the center.
             let dx = CGFloat(max(0, -source.minX)) * cell
             let dy = CGFloat(max(0, -source.minY)) * cell

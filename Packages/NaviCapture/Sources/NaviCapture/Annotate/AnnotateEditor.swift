@@ -14,6 +14,7 @@ final class AnnotateEditor: NSObject, NSWindowDelegate {
 
     private let model: AnnotateModel
     private var window: NSWindow?
+    private var keyMonitor: Any?
     private let onDone: (Result) -> Void
     private let onClose: () -> Void
 
@@ -27,8 +28,8 @@ final class AnnotateEditor: NSObject, NSWindowDelegate {
     func show() {
         let visible = (NSScreen.underMouse ?? NSScreen.main)?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1200, height: 800)
         let image = model.pointSize
-        let fit = min(1, (visible.width * 0.85) / image.width, (visible.height * 0.85 - 60) / image.height)
-        let size = CGSize(width: max(760, image.width * fit), height: max(420, image.height * fit + 60))
+        let fit = min(1, (visible.width * 0.85) / image.width, (visible.height * 0.85 - 100) / image.height)
+        let size = CGSize(width: max(760, image.width * fit), height: max(420, image.height * fit + 100))
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
@@ -45,6 +46,7 @@ final class AnnotateEditor: NSObject, NSWindowDelegate {
         ))
         window.center()
         self.window = window
+        watchKeys()
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
@@ -55,7 +57,35 @@ final class AnnotateEditor: NSObject, NSWindowDelegate {
         window?.close()
     }
 
+    /// ⌘Z undo, ⇧⌘Z redo, and Delete for the selected mark. A local key monitor works even
+    /// though Navi has no Edit menu. While text is being typed, the text field keeps these keys.
+    private func watchKeys() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let windowNumber = event.windowNumber
+            let key = event.charactersIgnoringModifiers?.lowercased()
+            let code = event.keyCode
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                .subtracting([.function, .numericPad, .capsLock])
+            let handled = MainActor.assumeIsolated { () -> Bool in
+                guard let self, let window = self.window, window.windowNumber == windowNumber,
+                      self.model.textEdit == nil
+                else { return false }
+                if key == "z", flags == .command { self.model.undo(); return true }
+                if key == "z", flags == [.command, .shift] { self.model.redo(); return true }
+                // 51 is Delete (backspace), 117 is Forward Delete.
+                if code == 51 || code == 117, flags.isEmpty, self.model.selection != nil {
+                    self.model.deleteSelection()
+                    return true
+                }
+                return false
+            }
+            return handled ? nil : event
+        }
+    }
+
     func windowWillClose(_ notification: Notification) {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
         window = nil
         onClose()
     }
@@ -83,29 +113,61 @@ struct AnnotateView: View {
 
     // MARK: Toolbar
 
+    /// One row when the window is wide enough. Otherwise two rows: tools on top, then style,
+    /// undo, and the actions. Nothing squishes or hides.
     private var toolbar: some View {
-        HStack(spacing: 2) {
-            ForEach(Self.drawingTools, id: \.self, content: toolButton)
-            Divider().frame(height: 20).padding(.horizontal, 4)
-            ForEach(Self.effectTools, id: \.self, content: toolButton)
-            Divider().frame(height: 20).padding(.horizontal, 4)
-            ColorPicker("Color", selection: colorBinding, supportsOpacity: false)
-                .labelsHidden()
-                .help("Color")
-            Button {
-                let model = model
-                NSColorSampler().show { picked in
-                    guard let rgb = picked?.usingColorSpace(.sRGB) else { return }
-                    let color = RGBA(red: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent)
-                    Task { @MainActor in model.color = color }
-                }
-            } label: { Image(systemName: "eyedropper") }
-                .help("Pick a color from the screen")
-            Picker("Size", selection: $model.strokeSize) {
-                ForEach(StrokeSize.allCases, id: \.self) { Text($0.title).tag($0) }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                toolGroups
+                styleGroup
+                historyGroup
+                Spacer(minLength: 16)
+                actions
             }
-            .labelsHidden()
-            .frame(width: 92)
+            // Narrow: tools and the actions on top, style and undo below.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    toolGroups
+                    Spacer(minLength: 16)
+                    actions
+                }
+                HStack(spacing: 10) {
+                    styleGroup
+                    historyGroup
+                }
+            }
+            // Very narrow: the actions get their own row.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) { toolGroups }
+                HStack(spacing: 10) {
+                    styleGroup
+                    historyGroup
+                    Spacer(minLength: 16)
+                    actions
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .padding(.leading, 66) // room for the window buttons
+    }
+
+    @ViewBuilder private var toolGroups: some View {
+        ToolGroup { ForEach(Self.drawingTools, id: \.self, content: toolButton) }
+        ToolGroup { ForEach(Self.effectTools, id: \.self, content: toolButton) }
+    }
+
+    private var styleGroup: some View {
+        ToolGroup {
+            ColorWell(model: model)
+            ForEach(StrokeSize.allCases, id: \.self) { size in
+                IconButton(isOn: model.strokeSize == size, style: .subtle, help: "Line: \(size.title)") {
+                    model.strokeSize = size
+                } label: {
+                    Capsule().frame(width: 14, height: size.previewHeight)
+                }
+            }
             Menu {
                 Button("Rotate Left") { model.apply(.rotateCounterclockwise) }
                 Button("Rotate Right") { model.apply(.rotateClockwise) }
@@ -115,55 +177,60 @@ struct AnnotateView: View {
                 ForEach([0.5, 0.75, 1.5, 2], id: \.self) { factor in
                     Button("Resize to \(Int(factor * 100))%") { model.apply(.resize(factor)) }
                 }
-            } label: { Image(systemName: "rotate.right") }
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("Rotate, flip, resize")
-            Divider().frame(height: 20).padding(.horizontal, 4)
-            Button(action: model.undo) { Image(systemName: "arrow.uturn.backward") }
-                .keyboardShortcut("z", modifiers: .command)
+            } label: {
+                Image(systemName: "rotate.right").frame(width: 28, height: 26).contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Rotate, flip, resize")
+        }
+    }
+
+    private var historyGroup: some View {
+        ToolGroup {
+            IconButton(help: "Undo (⌘Z)", action: model.undo) { Image(systemName: "arrow.uturn.backward") }
                 .disabled(!model.canUndo)
-                .help("Undo")
-            Button(action: model.redo) { Image(systemName: "arrow.uturn.forward") }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
+            IconButton(help: "Redo (⇧⌘Z)", action: model.redo) { Image(systemName: "arrow.uturn.forward") }
                 .disabled(!model.canRedo)
-                .help("Redo")
-            Button(action: model.deleteSelection) { EmptyView() }
-                .keyboardShortcut(.delete, modifiers: [])
-                .frame(width: 0)
-                .opacity(0)
-            Spacer(minLength: 8)
+        }
+    }
+
+    private var actions: some View {
+        HStack(spacing: 8) {
             dragMe
             Button("Cancel", action: onCancel)
                 .keyboardShortcut(.cancelAction)
+                .buttonStyle(.bordered)
             Button("Done", action: onDone)
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .padding(.leading, 70) // room for the window buttons
+        .fixedSize()
     }
 
     private func toolButton(_ tool: AnnotationTool) -> some View {
-        Button { model.tool = tool } label: {
+        IconButton(isOn: model.tool == tool, help: tool.help) { model.tool = tool } label: {
             Image(systemName: tool.symbol)
-                .frame(width: 28, height: 26)
-                .foregroundStyle(model.tool == tool ? Color.white : Color.primary)
-                .background(RoundedRectangle(cornerRadius: 6).fill(model.tool == tool ? Color.accentColor : .clear))
-                .contentShape(Rectangle())
         }
-        .help(tool.title)
     }
 
-    /// Drag this into any app to share the marked-up image.
+    /// A small picture of the marked-up shot. Drag it into any app to drop the image there.
     private var dragMe: some View {
-        Label("Drag me", systemImage: "hand.draw")
-            .font(.callout)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+        Group {
+            if let image = model.rendered {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Color.primary.opacity(0.08)
+            }
+        }
+            .frame(width: 36, height: 24)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.primary.opacity(0.2), lineWidth: 1))
+            .contentShape(Rectangle())
+            .onHover { inside in (inside ? NSCursor.openHand : NSCursor.arrow).set() }
             .onDrag {
                 guard let flat = model.flatten(), let png = ImageOps.png(flat, pointSize: model.pointSize) else {
                     return NSItemProvider()
@@ -176,7 +243,7 @@ struct AnnotateView: View {
                 provider.suggestedName = url.deletingPathExtension().lastPathComponent
                 return provider
             }
-            .help("Drag the marked-up image into any app")
+            .help("Drag into any app")
     }
 
     private var colorBinding: Binding<Color> {
@@ -204,6 +271,9 @@ struct AnnotateView: View {
                         .frame(width: shown.width, height: shown.height)
                         .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
                 }
+                if let mark = model.selectedMark, model.cropRect == nil {
+                    SelectionOverlay(mark: mark, fit: fit)
+                }
                 if let crop = model.cropRect {
                     cropOverlay(crop, fit: fit, shown: shown)
                 }
@@ -214,6 +284,12 @@ struct AnnotateView: View {
             .frame(width: shown.width, height: shown.height)
             .contentShape(Rectangle())
             .gesture(drawGesture(fit: fit))
+            .onContinuousHover { phase in
+                switch phase {
+                case let .active(location): model.cursor(at: pixel(location, fit: fit)).set()
+                case .ended: NSCursor.arrow.set()
+                }
+            }
             .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
                 loadDroppedImage(providers)
                 return true
@@ -283,7 +359,7 @@ struct AnnotateView: View {
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 3).stroke(Color.accentColor, lineWidth: 1))
             .offset(x: point.x * fit, y: point.y * fit)
-            .onSubmit(model.commitText)
+            .onSubmit(model.finishText)
     }
 
     private func loadDroppedImage(_ providers: [NSItemProvider]) {
@@ -300,6 +376,192 @@ struct AnnotateView: View {
                 }
                 return
             }
+        }
+    }
+}
+
+// MARK: - Toolbar parts
+
+/// A rounded group of toolbar buttons.
+private struct ToolGroup<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(spacing: 1) { content }
+            .padding(2)
+            .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+            .fixedSize()
+    }
+}
+
+/// A 28 × 26 icon button. `isOn` shows it selected.
+private struct IconButton<Label: View>: View {
+    enum Style { case accent, subtle }
+
+    var isOn = false
+    var style = Style.accent
+    let help: String
+    let action: () -> Void
+    @ViewBuilder var label: Label
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            label
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 28, height: 26)
+                .foregroundStyle(foreground)
+                .background(RoundedRectangle(cornerRadius: 7).fill(background))
+                .contentShape(Rectangle())
+        }
+        .onHover { isHovered = $0 }
+        .help(help)
+    }
+
+    private var foreground: Color {
+        if isOn { return style == .accent ? .white : .primary }
+        return .primary.opacity(isEnabled ? 0.85 : 0.3)
+    }
+
+    private var background: Color {
+        if isOn { return style == .accent ? .accentColor : .primary.opacity(0.16) }
+        return .primary.opacity(isHovered && isEnabled ? 0.08 : 0)
+    }
+}
+
+/// A round swatch of the current color. Click for preset colors, any color, or the screen sampler.
+private struct ColorWell: View {
+    @Bindable var model: AnnotateModel
+    @State private var isOpen = false
+
+    static let presets: [RGBA] = [
+        .red,
+        RGBA(red: 1, green: 0.58, blue: 0),
+        RGBA(red: 1, green: 0.8, blue: 0),
+        RGBA(red: 0.2, green: 0.78, blue: 0.35),
+        RGBA(red: 0, green: 0.48, blue: 1),
+        RGBA(red: 0.69, green: 0.32, blue: 0.87),
+        RGBA(red: 1, green: 1, blue: 1),
+        RGBA(red: 0, green: 0, blue: 0),
+    ]
+
+    var body: some View {
+        Button { isOpen.toggle() } label: {
+            Circle()
+                .fill(model.color.swiftUI)
+                .overlay(Circle().strokeBorder(Color.primary.opacity(0.25), lineWidth: 1))
+                .frame(width: 16, height: 16)
+                .frame(width: 28, height: 26)
+                .contentShape(Rectangle())
+        }
+        .help("Color")
+        .popover(isPresented: $isOpen, arrowEdge: .bottom) { palette }
+    }
+
+    private var palette: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 8), count: 4), spacing: 8) {
+                ForEach(Self.presets, id: \.self) { color in
+                    Button { model.color = color; isOpen = false } label: {
+                        Circle()
+                            .fill(color.swiftUI)
+                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.25), lineWidth: 1))
+                            .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: 2).padding(-3)
+                                .opacity(model.color == color ? 1 : 0))
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Divider()
+            HStack {
+                ColorPicker("More…", selection: Binding(
+                    get: { model.color.swiftUI },
+                    set: { color in
+                        guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return }
+                        model.color = RGBA(red: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent)
+                    }
+                ), supportsOpacity: false)
+                Spacer()
+                Button {
+                    isOpen = false
+                    let model = model
+                    NSColorSampler().show { picked in
+                        guard let rgb = picked?.usingColorSpace(.sRGB) else { return }
+                        let color = RGBA(red: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent)
+                        Task { @MainActor in model.color = color }
+                    }
+                } label: { Image(systemName: "eyedropper") }
+                    .help("Pick a color from the screen")
+            }
+            .font(.callout)
+        }
+        .padding(12)
+        .frame(width: 152)
+    }
+}
+
+/// The selected mark's dashed outline and handles, drawn at screen size so they stay easy
+/// to see and grab at any zoom.
+private struct SelectionOverlay: View {
+    let mark: Annotation
+    let fit: CGFloat
+
+    var body: some View {
+        let lineGap = mark.isBox ? CGFloat(mark.lineWidth) / 2 * fit + 3 : 6
+        let outline = (mark.isBox ? mark.box : mark.bounds)
+            .applying(CGAffineTransform(scaleX: fit, y: fit))
+            .insetBy(dx: -lineGap, dy: -lineGap)
+        ZStack(alignment: .topLeading) {
+            if mark.kind != .arrow, mark.kind != .line {
+                Rectangle()
+                    .stroke(Color.white.opacity(0.9), lineWidth: 1)
+                    .frame(width: outline.width, height: outline.height)
+                    .offset(x: outline.minX, y: outline.minY)
+                Rectangle()
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .frame(width: outline.width, height: outline.height)
+                    .offset(x: outline.minX, y: outline.minY)
+            }
+            ForEach(mark.handles, id: \.self) { handle in
+                let point = handlePoint(handle, outline: outline)
+                let size: CGFloat = handle.isEdge ? 7 : 9
+                Circle()
+                    .fill(.white)
+                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
+                    .frame(width: size, height: size)
+                    .offset(x: point.x - size / 2, y: point.y - size / 2)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// Box handles sit on the dashed outline. Line and arrow handles sit on the ends.
+    private func handlePoint(_ handle: Annotation.Handle, outline: CGRect) -> CGPoint {
+        guard mark.isBox else {
+            let point = mark.point(of: handle)
+            return CGPoint(x: point.x * fit, y: point.y * fit)
+        }
+        let mark = mark.point(of: handle)
+        let box = self.mark.box
+        let x = mark.x < box.midX - 0.5 ? outline.minX : (mark.x > box.midX + 0.5 ? outline.maxX : outline.midX)
+        let y = mark.y < box.midY - 0.5 ? outline.minY : (mark.y > box.midY + 0.5 ? outline.maxY : outline.midY)
+        return CGPoint(x: x, y: y)
+    }
+}
+
+private extension RGBA {
+    var swiftUI: Color { Color(.sRGB, red: red, green: green, blue: blue) }
+}
+
+private extension StrokeSize {
+    var previewHeight: CGFloat {
+        switch self {
+        case .small: 1.5
+        case .medium: 3
+        case .large: 5
         }
     }
 }

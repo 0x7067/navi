@@ -44,19 +44,29 @@ final class AnnotateModel {
     }
 
     var color: RGBA = .red {
-        didSet { recolorSelection() }
+        didSet { if !isSyncingStyle { restyleSelection() } }
     }
 
-    var strokeSize: StrokeSize = .medium
-    private(set) var selection: UUID?
+    var strokeSize: StrokeSize = .medium {
+        didSet { if !isSyncingStyle { restyleSelection() } }
+    }
+
+    /// The selected mark. It shows handles, and the color and size pickers change it.
+    private(set) var selection: UUID? {
+        didSet { syncStyleToSelection() }
+    }
     private(set) var cropRect: CGRect?
     var textEdit: TextEdit?
     private(set) var rendered: CGImage?
 
-    @ObservationIgnored private var undoStack = UndoStack<Snapshot>()
+    private var undoStack = UndoStack<Snapshot>()
     @ObservationIgnored private let renderer = AnnotationRenderer()
     @ObservationIgnored private var draft: Annotation?
     @ObservationIgnored private var dragOrigin: Annotation?
+    /// The handle being dragged on the selected mark.
+    @ObservationIgnored private var resizing: Annotation.Handle?
+    /// True while the pickers copy the selected mark's style, so that copy does not change the mark.
+    @ObservationIgnored private var isSyncingStyle = false
 
     var canUndo: Bool { undoStack.canUndo }
     var canRedo: Bool { undoStack.canRedo }
@@ -74,6 +84,14 @@ final class AnnotateModel {
 
     func pointerDown(at point: CGPoint) {
         commitText()
+        // A handle on the selected mark resizes it, whatever the tool.
+        if let selected = selectedMark, let handle = selected.handle(at: point, tolerance: 10 * scale) {
+            resizing = handle
+            dragOrigin = selected
+            recordUndo()
+            return
+        }
+        if tool != .select { selection = nil }
         switch tool {
         case .select:
             if let hit = document.hit(point, tolerance: 6 * scale) {
@@ -98,6 +116,12 @@ final class AnnotateModel {
     }
 
     func pointerDragged(from start: CGPoint, to point: CGPoint) {
+        if let handle = resizing, let origin = dragOrigin,
+           let index = document.annotations.firstIndex(where: { $0.id == origin.id }) {
+            document.annotations[index] = origin.resized(handle, to: point)
+            render()
+            return
+        }
         switch tool {
         case .select:
             guard let origin = dragOrigin, let index = document.annotations.firstIndex(where: { $0.id == origin.id }) else { return }
@@ -113,6 +137,12 @@ final class AnnotateModel {
 
     func pointerUp(from start: CGPoint, to point: CGPoint) {
         let moved = hypot(point.x - start.x, point.y - start.y) > 3 * scale
+        if resizing != nil {
+            resizing = nil
+            dragOrigin = nil
+            render()
+            return
+        }
         switch tool {
         case .select:
             dragOrigin = nil
@@ -126,16 +156,22 @@ final class AnnotateModel {
             }
         case .counter:
             recordUndo()
-            document.annotations.append(Annotation(
+            let counter = Annotation(
                 kind: .counter, start: point, end: point, color: color, lineWidth: 0,
                 number: document.nextCounter, fontSize: fontSize
-            ))
+            )
+            document.annotations.append(counter)
             document.nextCounter += 1
+            // The counter tool stays on, so you can click the next step.
+            selection = counter.id
         default:
             if var mark = draft, moved || mark.kind == .pencil || mark.kind == .highlighter {
                 mark.end = point
                 recordUndo()
                 document.annotations.append(mark)
+                // Back to the pointer, with the new mark selected: its handles show and the pickers change it.
+                tool = .select
+                selection = mark.id
             }
             draft = nil
         }
@@ -166,6 +202,55 @@ final class AnnotateModel {
             ))
         }
         render()
+    }
+
+    /// Return in the text box: keep the text, then go back to the pointer with it selected.
+    func finishText() {
+        let editedID = textEdit?.id
+        let count = document.annotations.count
+        commitText()
+        let id = editedID ?? (document.annotations.count > count ? document.annotations.last?.id : nil)
+        guard let id, document.annotations.contains(where: { $0.id == id }) else { return }
+        tool = .select
+        selection = id
+        render()
+    }
+
+    /// The pointer for a spot on the image: resize arrows over a handle, a hand over a mark
+    /// you can move, a crosshair for drawing.
+    func cursor(at point: CGPoint) -> NSCursor {
+        if let mark = selectedMark, let handle = mark.handle(at: point, tolerance: 10 * scale) {
+            return Self.resizeCursor(handle, of: mark)
+        }
+        switch tool {
+        case .select:
+            return document.hit(point, tolerance: 6 * scale) == nil ? .arrow : .openHand
+        case .text:
+            return .iBeam
+        default:
+            return .crosshair
+        }
+    }
+
+    private static func resizeCursor(_ handle: Annotation.Handle, of mark: Annotation) -> NSCursor {
+        switch handle {
+        case .top: return .frameResize(position: .top, directions: .all)
+        case .bottom: return .frameResize(position: .bottom, directions: .all)
+        case .left: return .frameResize(position: .left, directions: .all)
+        case .right: return .frameResize(position: .right, directions: .all)
+        default:
+            guard mark.isBox else { return .crosshair }
+            let point = mark.point(of: handle)
+            let box = mark.box
+            let top = point.y <= box.midY, left = point.x <= box.midX
+            let position: NSCursor.FrameResizePosition = switch (top, left) {
+            case (true, true): .topLeft
+            case (true, false): .topRight
+            case (false, true): .bottomLeft
+            case (false, false): .bottomRight
+            }
+            return .frameResize(position: position, directions: .all)
+        }
     }
 
     func applyCrop() {
@@ -228,11 +313,33 @@ final class AnnotateModel {
 
     private var fontSize: Double { (8 + strokeSize.rawValue * 3) * scale }
 
-    private func recolorSelection() {
+    var selectedMark: Annotation? {
+        guard let selection else { return nil }
+        return document.annotations.first { $0.id == selection }
+    }
+
+    /// Gives the selected mark the picked color and size.
+    private func restyleSelection() {
         guard let selection, let index = document.annotations.firstIndex(where: { $0.id == selection }) else { return }
+        var mark = document.annotations[index]
+        mark.color = color
+        if mark.usesFontSize { mark.fontSize = fontSize } else if mark.lineWidth > 0 { mark.lineWidth = strokeSize.rawValue * scale }
+        guard mark != document.annotations[index] else { return }
         recordUndo()
-        document.annotations[index].color = color
+        document.annotations[index] = mark
         render()
+    }
+
+    /// Shows the selected mark's color and size in the pickers.
+    private func syncStyleToSelection() {
+        guard let mark = selectedMark else { return }
+        isSyncingStyle = true
+        defer { isSyncingStyle = false }
+        if mark.kind != .image, mark.kind != .blur, mark.kind != .pixelate, mark.kind != .spotlight { color = mark.color }
+        let size = mark.usesFontSize ? (mark.fontSize / scale - 8) / 3 : mark.lineWidth / scale
+        if let nearest = StrokeSize.allCases.min(by: { abs($0.rawValue - size) < abs($1.rawValue - size) }), size > 0 {
+            strokeSize = nearest
+        }
     }
 
     private func recordUndo() {
@@ -250,7 +357,7 @@ final class AnnotateModel {
         var marks = document.annotations
         if let editing = textEdit?.id { marks.removeAll { $0.id == editing } }
         if let draft { marks.append(draft) }
-        rendered = renderer.render(base: base, marks: marks, selection: selection)
+        rendered = renderer.render(base: base, marks: marks)
     }
 }
 

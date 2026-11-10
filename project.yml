@@ -8,7 +8,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"
 packages:
   NaviCore:
     path: Packages/NaviCore
@@ -20,21 +20,30 @@ packages:
     path: Packages/NaviRecording
   NaviDictation:
     path: Packages/NaviDictation
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.1
 targets:
   Navi:
     type: application
     platform: macOS
-    sources: [App/Sources]
+    sources: [App/Sources, App/Assets.xcassets]
     dependencies:
       - package: NaviCore
       - package: NaviClipboard
       - package: NaviCapture
       - package: NaviRecording
       - package: NaviDictation
+      - package: Sparkle
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Navi
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        SUFeedURL: https://github.com/donovanhiland/navi/releases/latest/download/appcast.xml
+        SUEnableAutomaticChecks: true
+        SUPublicEDKey: X+a0pYYK9iXdbzkPar690FFC21oqmzJn+f3Ne40NtOE=
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Navi uses the microphone for talk to type, and for your voice in screen recordings.
@@ -48,6 +57,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.donovanhiland.navi
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_TEAM: 77SAW76597
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Development"

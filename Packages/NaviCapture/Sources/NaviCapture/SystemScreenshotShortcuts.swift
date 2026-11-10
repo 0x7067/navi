@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Lends macOS's `⇧⌘3`, `⇧⌘4`, and `⇧⌘5` screenshot shortcuts to Navi while it runs.
+/// Lends macOS's `⇧⌘3`, `⇧⌘4`, `⇧⌘5`, `⌃⇧⌘3`, and `⌃⇧⌘4` screenshot shortcuts to Navi while it runs.
 ///
 /// `takeOver()` turns the macOS shortcuts off and keeps a backup of how they were.
 /// `giveBack()` puts them back exactly as they were. The app calls `giveBack()` when it quits, so the
@@ -11,12 +11,15 @@ import os
 /// The shortcuts live in the `com.apple.symbolichotkeys` preferences, under `AppleSymbolicHotKeys`.
 @MainActor
 public enum SystemScreenshotShortcuts {
-    /// Symbolic hot key IDs. 28: save the screen as a file (`⇧⌘3`). 30: save an area as a file (`⇧⌘4`).
+    /// Symbolic hot key IDs. 28: save the screen as a file (`⇧⌘3`). 29: copy the screen (`⌃⇧⌘3`).
+    /// 30: save an area as a file (`⇧⌘4`). 31: copy an area (`⌃⇧⌘4`).
     /// 184: the screenshot and recording toolbar (`⇧⌘5`).
     /// Each one maps to its default entry, used when the preferences have no entry for it.
     static let defaults: [String: [String: Any]] = [
         "28": entry(enabled: true, parameters: [51, 20, 1_179_648]),
+        "29": entry(enabled: true, parameters: [51, 20, 1_441_792]),
         "30": entry(enabled: true, parameters: [52, 21, 1_179_648]),
+        "31": entry(enabled: true, parameters: [52, 21, 1_441_792]),
         "184": entry(enabled: true, parameters: [53, 23, 1_179_648]),
     ]
 

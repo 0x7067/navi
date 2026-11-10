@@ -79,6 +79,94 @@ import Testing
         stack.record(2)
         #expect(!stack.canRedo)
     }
+
+    @Test func dragAHandleToResize() {
+        let mark = box(CGRect(x: 10, y: 10, width: 100, height: 50))
+        #expect(mark.handles.count == 8)
+        #expect(mark.handle(at: CGPoint(x: 112, y: 61), tolerance: 5) == .end)
+        #expect(mark.handle(at: CGPoint(x: 10, y: 60), tolerance: 1) == .startXEndY)
+        #expect(mark.handle(at: CGPoint(x: 60, y: 30), tolerance: 5) == nil)
+        let wider = mark.resized(.endXStartY, to: CGPoint(x: 200, y: 0))
+        #expect(wider.start == CGPoint(x: 10, y: 0))
+        #expect(wider.end == CGPoint(x: 200, y: 60))
+        // Grab anywhere along an edge, not just a dot.
+        #expect(mark.handle(at: CGPoint(x: 40, y: 59), tolerance: 3) == .bottom)
+        #expect(mark.handle(at: CGPoint(x: 9, y: 25), tolerance: 3) == .left)
+        // Edges work even when the box was drawn from the bottom right.
+        var backwards = mark
+        backwards.start = CGPoint(x: 110, y: 60)
+        backwards.end = CGPoint(x: 10, y: 10)
+        let taller = backwards.resized(.top, to: CGPoint(x: 0, y: -20))
+        #expect(taller.box == CGRect(x: 10, y: -20, width: 100, height: 80))
+        var arrow = mark
+        arrow.kind = .arrow
+        #expect(arrow.handles == [.start, .end])
+        arrow.kind = .pencil
+        #expect(arrow.handles.isEmpty)
+    }
+}
+
+@MainActor
+@Suite struct AnnotateModelTests {
+    private func model() -> AnnotateModel {
+        let context = CGContext(
+            data: nil, width: 400, height: 300, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        return AnnotateModel(base: context.makeImage()!, scale: 2)
+    }
+
+    @Test func aNewMarkIsSelectedAndThePickersChangeIt() {
+        let model = model()
+        model.tool = .rectangle
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerDragged(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 80))
+        model.pointerUp(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 80))
+        let id = try! #require(model.document.annotations.first?.id)
+        #expect(model.selection == id)
+        #expect(model.tool == .select)
+
+        let blue = RGBA(red: 0, green: 0, blue: 1)
+        model.color = blue
+        model.strokeSize = .large
+        #expect(model.document.annotations[0].color == blue)
+        #expect(model.document.annotations[0].lineWidth == StrokeSize.large.rawValue * 2)
+
+        model.undo()
+        #expect(model.document.annotations[0].lineWidth == StrokeSize.medium.rawValue * 2)
+    }
+
+    @Test func dragTheSelectedMarksHandleWithAnyTool() {
+        let model = model()
+        model.tool = .rectangle
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerDragged(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 80))
+        model.pointerUp(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 80))
+        model.pointerDown(at: CGPoint(x: 100, y: 80))
+        model.pointerDragged(from: CGPoint(x: 100, y: 80), to: CGPoint(x: 200, y: 150))
+        model.pointerUp(from: CGPoint(x: 100, y: 80), to: CGPoint(x: 200, y: 150))
+        #expect(model.document.annotations.count == 1)
+        #expect(model.document.annotations[0].end == CGPoint(x: 200, y: 150))
+    }
+
+    @Test func selectingAMarkShowsItsStyleWithoutChangingIt() {
+        let model = model()
+        model.color = RGBA(red: 0, green: 1, blue: 0)
+        model.strokeSize = .small
+        model.tool = .line
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerDragged(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 10))
+        model.pointerUp(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 10))
+        model.tool = .arrow
+        model.color = .red
+        model.strokeSize = .large
+        model.tool = .select
+        model.pointerDown(at: CGPoint(x: 50, y: 10))
+        model.pointerUp(from: CGPoint(x: 50, y: 10), to: CGPoint(x: 50, y: 10))
+        #expect(model.color == RGBA(red: 0, green: 1, blue: 0))
+        #expect(model.strokeSize == .small)
+        #expect(model.document.annotations[0].lineWidth == StrokeSize.small.rawValue * 2)
+    }
 }
 
 @Suite struct TextRecognizerTests {

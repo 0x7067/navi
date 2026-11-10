@@ -33,6 +33,11 @@ struct TextCleaner: Sendable {
 
     // MARK: Model
 
+    static var modelIsAvailable: Bool {
+        guard #available(macOS 26.0, *) else { return false }
+        return modelIsReady
+    }
+
     @available(macOS 26.0, *)
     private static var modelIsReady: Bool {
         if case .available = SystemLanguageModel.default.availability { return true }

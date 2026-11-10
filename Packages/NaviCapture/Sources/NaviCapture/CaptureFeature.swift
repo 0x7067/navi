@@ -40,6 +40,8 @@ public final class CaptureFeature {
     /// Open editor windows, kept alive until they close.
     private var editors: [UUID: AnyObject] = [:]
     private var isBusy = false
+    /// The next shot also goes to the clipboard (`⌃⇧⌘3`, `⌃⇧⌘4`).
+    private var copiesNextShot = false
     private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Capture")
 
     public init(inbox: Inbox, settings: CaptureSettings = CaptureSettings()) {
@@ -78,6 +80,18 @@ public final class CaptureFeature {
 
     public func captureArea() { startSelection(.area, purpose: .screenshot) }
 
+    /// Like `captureArea`, then copies the shot to the clipboard (macOS's `⌃⇧⌘4`).
+    public func captureAreaToClipboard() {
+        copiesNextShot = true
+        startSelection(.area, purpose: .screenshot)
+    }
+
+    /// Like `captureFullscreen`, then copies the shot to the clipboard (macOS's `⌃⇧⌘3`).
+    public func captureFullscreenToClipboard() {
+        copiesNextShot = true
+        captureFullscreen()
+    }
+
     public func captureWindow() { startSelection(.window, purpose: .screenshot) }
 
     /// One hotkey, then pick the mode from the bar at the bottom of the screen.
@@ -95,7 +109,10 @@ public final class CaptureFeature {
     public func pickRecordingRegion() { startSelection(.area, purpose: .record) }
 
     public func captureFullscreen() {
-        guard begin() else { return }
+        guard begin() else {
+            copiesNextShot = false
+            return
+        }
         guard let screen = NSScreen.underMouse else {
             isBusy = false
             return
@@ -161,30 +178,36 @@ public final class CaptureFeature {
         _ mode: SelectionSession.Mode, purpose: SelectionSession.Purpose, modeBar: Bool = false, timer: Int = 0
     ) {
         if purpose == .record, onRecordRequest == nil { return }
-        guard begin() else { return }
+        guard begin() else {
+            copiesNextShot = false
+            return
+        }
         let previousApp = NSWorkspace.shared.frontmostApplication
-        Task { [weak self] in
+        // Show the overlay at once over the live screen, then freeze the screen behind it. The
+        // overlay is above layer 0, so the frozen images leave it out.
+        let windows = ScreenGrabber.onScreenWindows()
+        let session = SelectionSession(screens: NSScreen.screens, mode: mode, windows: windows) { [weak self] outcome in
+            guard let self else { return }
+            let session = self.session
+            selectionEnded(
+                outcome, purpose: session?.purpose ?? purpose, timer: session?.timer ?? timer, previousApp: previousApp
+            )
+        }
+        session.purpose = purpose
+        session.timer = timer
+        session.showsModeBar = modeBar
+        session.canRecord = onRecordRequest != nil
+        self.session = session
+        NSApp.activate()
+        session.begin()
+        Task { [weak self, weak session] in
             guard let self else { return }
             do {
                 let screens = try await ScreenGrabber.captureAllScreens(hideDesktopIcons: settings.hideDesktopIcons)
-                let windows = ScreenGrabber.onScreenWindows()
-                let session = SelectionSession(screens: screens, mode: mode, windows: windows) { [weak self] outcome in
-                    guard let self else { return }
-                    let session = self.session
-                    selectionEnded(
-                        outcome, purpose: session?.purpose ?? purpose, timer: session?.timer ?? timer, previousApp: previousApp
-                    )
-                }
-                session.purpose = purpose
-                session.timer = timer
-                session.showsModeBar = modeBar
-                session.canRecord = onRecordRequest != nil
-                self.session = session
-                NSApp.activate()
-                session.begin()
+                session?.freeze(screens)
             } catch {
                 logger.error("Could not freeze the screen: \(error.localizedDescription)")
-                isBusy = false
+                session?.finish(.cancelled)
             }
         }
     }
@@ -197,6 +220,7 @@ public final class CaptureFeature {
         switch (outcome, purpose) {
         case (.cancelled, _):
             isBusy = false
+            copiesNextShot = false
 
         case let (.fullscreen(screen), .record):
             isBusy = false
@@ -284,6 +308,10 @@ public final class CaptureFeature {
             width: CGFloat(captured.image.width) / captured.scale,
             height: CGFloat(captured.image.height) / captured.scale
         )
+        if copiesNextShot {
+            copiesNextShot = false
+            NaviPasteboard.write(image: Self.image(captured.image, pointSize: pointSize))
+        }
         guard let png = ImageOps.png(captured.image, pointSize: pointSize) else {
             logger.error("Could not encode the capture as PNG")
             return

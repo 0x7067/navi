@@ -60,6 +60,7 @@ public final class DictationFeature {
     /// Starts listening for the fn key when `isEnabled` is true.
     public func start() {
         isStarted = true
+        SpeechEngines.warmUpParakeet()
         if isEnabled { attachMonitor() }
     }
 

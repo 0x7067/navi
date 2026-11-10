@@ -23,7 +23,7 @@ enum CaptureError: Error {
 enum ScreenGrabber {
     static let finderBundleID = "com.apple.finder"
 
-    /// Captures every display, without Navi's own windows. Used to freeze the screen before a selection.
+    /// Captures every display, without Navi's overlays and cards. Used to freeze the screen before a selection.
     static func captureAllScreens(hideDesktopIcons: Bool) async throws -> [(NSScreen, CapturedImage)] {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         var result: [(NSScreen, CapturedImage)] = []
@@ -33,7 +33,7 @@ enum ScreenGrabber {
         return result
     }
 
-    /// Captures one display, without Navi's own windows.
+    /// Captures one display, without Navi's overlays and cards.
     static func capture(_ screen: NSScreen, hideDesktopIcons: Bool) async throws -> CapturedImage {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         return try await capture(screen, content: content, hideDesktopIcons: hideDesktopIcons)
@@ -63,15 +63,14 @@ enum ScreenGrabber {
         return CapturedImage(image: image, scale: scale)
     }
 
-    /// Normal app windows on screen, front to back, without Navi's own windows.
+    /// Normal app windows on screen, front to back. Navi's own normal windows (such as the markup
+    /// editor) count too; its overlays, cards, and pills are above layer 0, so they never do.
     static func onScreenWindows() -> [OnScreenWindow] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return [] }
-        let ownPID = ProcessInfo.processInfo.processIdentifier
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         return list.compactMap { info in
             guard (info[kCGWindowLayer as String] as? Int) == 0,
-                  (info[kCGWindowOwnerPID as String] as? pid_t) != ownPID,
                   (info[kCGWindowAlpha as String] as? Double ?? 1) > 0,
                   let number = info[kCGWindowNumber as String] as? CGWindowID,
                   let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
@@ -92,7 +91,9 @@ enum ScreenGrabber {
         let ownBundleID = Bundle.main.bundleIdentifier
         let excluded = content.windows.filter { window in
             let bundleID = window.owningApplication?.bundleIdentifier
-            if bundleID == ownBundleID { return true }
+            // Leave out Navi's overlays, cards, pins, and pills (all above layer 0), but keep its
+            // normal windows, such as the markup editor, so you can take a shot of them.
+            if bundleID == ownBundleID { return window.windowLayer != 0 }
             // Finder draws desktop icons in windows below the normal window layer.
             return hideDesktopIcons && bundleID == finderBundleID && window.windowLayer < 0
         }

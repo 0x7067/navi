@@ -4,6 +4,7 @@ import NaviClipboard
 import NaviCore
 import NaviDictation
 import NaviRecording
+import Sparkle
 import SwiftUI
 import os
 
@@ -23,6 +24,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var clipboard = ClipboardFeature(inbox: inbox)
     lazy var capture = CaptureFeature(inbox: inbox)
     let recording = RecordingFeature()
+    /// Sparkle: checks the appcast on the GitHub Releases page once a day, and from the menu.
+    /// Off in Debug builds, so a release never replaces the development copy (it has a different
+    /// signature, and macOS would ask for every permission again).
+    #if DEBUG
+    let updater = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
+    #else
+    let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    #endif
     lazy var dictation = DictationFeature(inbox: inbox)
     private var historyHotKey: HotKey?
     private var menuHotKey: HotKey?
@@ -125,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Turns Navi's ⇧⌘3, ⇧⌘4, and ⇧⌘5 on or off. On: the macOS screenshot keys are off while Navi runs.
+    /// Turns Navi's screenshot keys (⇧⌘3, ⇧⌘4, ⇧⌘5, ⌃⇧⌘3, ⌃⇧⌘4) on or off. On: the macOS screenshot keys are off while Navi runs.
     func setUseNaviScreenshotKeys(_ use: Bool) {
         capture.settings.useNaviScreenshotKeys = use
         for hotKey in screenshotHotKeys { hotKey.unregister() }
@@ -139,14 +148,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             register("⇧⌘3", keyCode: kVK_ANSI_3) { [weak self] in self?.capture.captureFullscreen() },
             register("⇧⌘4", keyCode: kVK_ANSI_4) { [weak self] in self?.capture.captureArea() },
             register("⇧⌘5", keyCode: kVK_ANSI_5) { [weak self] in self?.capture.captureAllInOne() },
+            register("⌃⇧⌘3", keyCode: kVK_ANSI_3, modifiers: cmdKey | shiftKey | controlKey) { [weak self] in
+                self?.capture.captureFullscreenToClipboard()
+            },
+            register("⌃⇧⌘4", keyCode: kVK_ANSI_4, modifiers: cmdKey | shiftKey | controlKey) { [weak self] in
+                self?.capture.captureAreaToClipboard()
+            },
         ].compactMap(\.self)
     }
 
     private func askAboutScreenshotKeys() {
         let alert = NSAlert()
-        alert.messageText = "Use Navi for ⇧⌘3, ⇧⌘4, and ⇧⌘5?"
+        alert.messageText = "Use Navi for the screenshot keys?"
         alert.informativeText = """
-            While Navi runs, ⇧⌘3, ⇧⌘4, and ⇧⌘5 take screenshots with Navi. Navi turns off the macOS screenshot \
+            While Navi runs, ⇧⌘3, ⇧⌘4, and ⇧⌘5 take screenshots with Navi, and ⌃⇧⌘3 and ⌃⇧⌘4 also copy them. Navi turns off the macOS screenshot \
             keys while it runs, and turns them back on when it quits. You can change this in the Navi menu.
             """
         alert.addButton(withTitle: "Use Navi")

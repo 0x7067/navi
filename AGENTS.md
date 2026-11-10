@@ -13,9 +13,6 @@ The main idea: every capture (clip, screenshot, recording, GIF, dictated text,
 OCR text) goes to one place. It shows first as a corner card, then in one shared
 history list. `⇧⌘V` opens that list.
 
-The name comes from the fairy in Zelda. Navi is a Nintendo name, so rename the
-app before any public release.
-
 ## Plan
 
 `docs/capture-plan.html` is the source of truth for screenshots and recording.
@@ -37,9 +34,13 @@ Desktop Icons). Not checked yet: the `⌥⇧⌘N` menu and a second display.
 
 **Steps 2–4 are built, not checked by Donovan yet:**
 - Step 2, markup editor (`Annotate/`): every tool in the plan, color picker
-  and screen color sampler, three line sizes, select/move/delete marks,
-  rotate, flip, resize, crop, undo/redo, drop an image in to combine, "Drag
-  me", Done updates the card and the history item. Marks stay editable in
+  and screen color sampler, three line sizes, select/move/delete marks (after you draw,
+  the tool goes back to the pointer with the new mark selected; a dashed outline
+  shows it; drag a corner, an end, or anywhere on an edge to resize; the cursor
+  shows what a drag does; the color and size pickers change the selected mark;
+  the counter tool stays on for the next step; spotlight is a rounded box), `⌘Z`/`⇧⌘Z`/Delete through a local key monitor,
+  rotate, flip, resize, crop, undo/redo, drop an image in to combine, a small
+  picture of the shot to drag into any app (top right, beside Cancel and Done), Done updates the card and the history item. Marks stay editable in
   `<id>.navi` (JSON + base PNG) beside the Inbox file.
 - Step 3 (`Extras/`): pin to screen (move, scroll to resize, opacity, lock so
   clicks go through, unlock from the menu), Capture Text (OCR + QR, Vision),
@@ -50,8 +51,10 @@ Desktop Icons). Not checked yet: the `⌥⇧⌘N` menu and a second display.
 
 **Talk to type and step 5 are built, not checked by Donovan yet:**
 - `Packages/NaviDictation`: hold fn to talk, double-tap fn to lock, pill with
-  a waveform, on-device speech (`SpeechAnalyzer`, fallback
-  `SFSpeechRecognizer`), cleanup with Foundation Models or rules, paste at the
+  a waveform, on-device speech (Parakeet TDT v3 through FluidAudio, from Hex;
+  `SpeechAnalyzer` or `SFSpeechRecognizer` until the Parakeet model is loaded.
+  The model, about 0.5 GB, downloads on first start to
+  `~/Library/Application Support/FluidAudio/Models`), cleanup with Foundation Models or rules, paste at the
   cursor, then the old clipboard comes back. fn with another key (fn+⌫,
   fn+arrows) never dictates. The first launch asks before it uses fn. When on,
   Navi borrows the fn key setting (`AppleFnUsageType` = 0, "Do Nothing", applied
@@ -84,20 +87,31 @@ video editor.
 - **Hide desktop icons and mute notifications** do not change the real screen.
   Navi leaves Finder's desktop windows and Notification Center's windows out of
   the ScreenCaptureKit filter.
+- **Talk to type follows Hex** (`anomalyco/hex`, MIT, from the OpenCode
+  team). Port Hex's features; do not design new dictation features from
+  scratch. `docs/upstream-hex.md` has the feature map, what to port next, and
+  the sync steps. Check each port with the dictation benchmark
+  (`cd Packages/NaviDictation && swift run dictation-bench`).
 - **Single window capture** uses `SCContentFilter(desktopIndependentWindow:)`,
   so nothing behind the window gets in.
 
 ### Capture defaults
 
-- Navi borrows `⇧⌘3` (fullscreen), `⇧⌘4` (area; Space for window), and `⇧⌘5`
-  (all-in-one bar) while it runs. `SystemScreenshotShortcuts` turns the macOS
-  ones off at launch (IDs 28, 30, 184 in `com.apple.symbolichotkeys`, then
+- Navi borrows `⇧⌘3` (fullscreen), `⇧⌘4` (area; Space for window), `⇧⌘5`
+  (all-in-one bar), and `⌃⇧⌘3` / `⌃⇧⌘4` (the same shots, also copied to the
+  clipboard) while it runs. `SystemScreenshotShortcuts` turns the macOS
+  ones off at launch (IDs 28, 29, 30, 31, 184 in `com.apple.symbolichotkeys`, then
   `activateSettings -u`) and puts them back exactly as they were on quit. A
   backup from an older run keeps its entries; new IDs are added to it. SIGTERM quits the normal way, so
   `pkill` restores them too. No code runs when the app is deleted, so quitting
   is what gives the keys back. The first launch asks; the menu has a toggle.
 - Other hotkeys: `⌥⇧⌘4` scrolling capture, `⌥⇧⌘T` capture text, `⌥⇧⌘5` record
   (press again to stop).
+- Shots leave out Navi's overlays, cards, pins, and pills (window layer above 0)
+  but keep Navi's normal windows, such as the markup editor.
+- The selection overlay shows at once over the live screen. The frozen screen
+  images arrive about 0.2 s later and are what gets cropped; a selection that
+  ends first waits for them.
 - Cards stay on the display where the capture was taken.
 - The history keeps a recording as MP4, with `<id>.preview.png` for its
   thumbnail; paste from history pastes the file. Background clears the
@@ -143,7 +157,8 @@ video editor.
   punctuation. On-device Apple speech first, then a small model for cleanup.
 
 Reference code to read, but **do not copy** (license): `sw33tLie/macshot`
-(GPL-3.0) and `lzhgus/Capso` (BSL 1.1). Ideas to borrow: Shottr's pixel ruler,
+(GPL-3.0) and `lzhgus/Capso` (BSL 1.1). Code you **may copy**, with its MIT
+notice kept: `anomalyco/hex`. Ideas to borrow: Shottr's pixel ruler,
 Xnapper's backgrounds, and macshot's auto-redact.
 
 ## Layout
@@ -159,6 +174,8 @@ Xnapper's backgrounds, and macshot's auto-redact.
 | `Packages/NaviDictation` | Talk to type: fn key, speech, cleanup, pill, paste |
 | `Packages/NaviCapture` | Selection overlay and all-in-one bar, ScreenCaptureKit capture, corner cards, `Annotate/`, `Extras/` (pin, OCR, toast), `Scroll/`, `Background/` |
 | `docs/capture-plan.html` | Prototype, feature map, and plan |
+| `docs/upstream-hex.md` | Hex as the upstream for talk to type: feature map, sync steps |
+| `Packages/NaviDictation/Bench` | Dictation benchmark cases and saved results |
 
 `Inbox` keeps items in `~/Library/Application Support/Navi/` (`history.json`
 plus `files/`). Items sort by pinned, then by `lastUsedAt`. The newest 200
@@ -173,10 +190,30 @@ xcodegen generate                       # after you change project.yml or add fi
   -configuration Debug -derivedDataPath build -quiet build
 cd Packages/NaviCore && swift test      # unit tests, run directly
 cd Packages/NaviCapture && swift test   # capture, markup, stitch, background tests
+NAVI_SNAPSHOTS=/tmp/navi-snaps swift test --filter EditorSnapshot  # in NaviCapture: draws the markup editor to PNGs (760/1000/1400 wide, dark and light) to check its look
 cd Packages/NaviRecording && swift test # recording math, GIF, audio mixdown
-cd Packages/NaviDictation && swift test # cleanup rules, fn gestures, fn setting
+cd Packages/NaviDictation && swift test # cleanup rules, fn gestures, fn setting, scoring
+cd Packages/NaviDictation && swift run dictation-bench [--audio [--speech apple,parakeet]] [--failures] [--save]
 pkill -x Navi; open build/Build/Products/Debug/Navi.app
 ```
+
+Releases live on GitHub (`donovanhiland/navi` is public). Run
+`scripts/release.sh <version> "<notes>"`: it bumps the version and build number
+in `project.yml`, runs `scripts/share.sh`, signs the update with the Sparkle key
+(EdDSA, private half in the login keychain; public half is `SUPublicEDKey` in
+`project.yml`), writes `appcast.xml`, and makes the release. Share
+`https://github.com/donovanhiland/navi/releases/latest/download/Navi.zip`.
+Navi checks `…/releases/latest/download/appcast.xml` daily and from "Check for
+Updates…" in the menu. Debug builds never update themselves.
+
+The app icon is drawn by `scripts/make-icon.swift` into
+`App/Assets.xcassets/AppIcon.appiconset`.
+
+To build a shareable copy without releasing it, run `scripts/share.sh`. It archives Release,
+then Xcode signs it with Developer ID, notarizes it with the Apple account
+signed in to Xcode, and staples it. Output: `dist/Navi.zip`. Not
+TestFlight or the App Store: both need the app sandbox, which blocks the system
+shortcut and paste features.
 
 Signing uses the Apple Development certificate, team `77SAW76597`, set in
 `project.yml`. `App/Navi.entitlements` (generated from `project.yml`) holds the
