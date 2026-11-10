@@ -53,6 +53,11 @@ final class NaviMenu: NSObject, NSMenuDelegate {
         menu.addItem(item("Talk to Type (Hold fn)", on: app.dictation.isEnabled) { [app] in
             app.setTalkToType(!app.dictation.isEnabled)
         })
+        if app.dictation.isEnabled {
+            menu.addItem(item("Keep Microphone Ready", on: app.dictation.keepsMicrophoneReady) { [app] in
+                app.dictation.keepsMicrophoneReady.toggle()
+            })
+        }
         menu.addItem(.separator())
         menu.addItem(item("Close All Cards") { capture.closeAllCards() })
         if capture.hasPins {
@@ -65,6 +70,9 @@ final class NaviMenu: NSObject, NSMenuDelegate {
         })
         menu.addItem(item("Copy Screenshots to Clipboard", on: settings.copyToClipboard) {
             settings.copyToClipboard.toggle()
+        })
+        menu.addItem(item("Edit Screenshots Before Copying", on: settings.editAfterCapture) {
+            settings.editAfterCapture.toggle()
         })
         menu.addItem(item("Use Navi for Screenshot Keys", on: settings.useNaviScreenshotKeys == true) { [app] in
             app.setUseNaviScreenshotKeys(settings.useNaviScreenshotKeys != true)

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import NaviCore
 
 /// A full-screen selection, one overlay window per display. The overlay shows at once over the live
 /// screen; the frozen screen images arrive a moment later (`freeze`) and are what gets cropped.
@@ -51,6 +52,9 @@ final class SelectionSession {
     let windows: [OnScreenWindow]
     private var overlays: [OverlayWindow] = []
     private var keyMonitor: Any?
+    /// Esc, Space, and Return as Carbon hot keys while the overlay is up. macOS may refuse to make
+    /// Navi the active app, and then no key event reaches the overlay or the local monitor.
+    private var sessionKeys: [HotKey] = []
     private var completion: ((Outcome) -> Void)?
 
     init(screens: [NSScreen], mode: Mode, windows: [OnScreenWindow], completion: @escaping (Outcome) -> Void) {
@@ -94,6 +98,12 @@ final class SelectionSession {
             }
             return nil
         }
+        sessionKeys = [
+            HotKey(keyCode: UInt32(kVK_Escape), modifiers: 0) { [weak self] in self?.finish(.cancelled) },
+            HotKey(keyCode: UInt32(kVK_Space), modifiers: 0) { [weak self] in self?.toggleMode() },
+            HotKey(keyCode: UInt32(kVK_Return), modifiers: 0) { [weak self] in self?.confirmHeldSelection() },
+            HotKey(keyCode: UInt32(kVK_ANSI_KeypadEnter), modifiers: 0) { [weak self] in self?.confirmHeldSelection() },
+        ].compactMap { $0 }
         refresh()
     }
 
@@ -156,6 +166,8 @@ final class SelectionSession {
     func finish(_ outcome: Outcome) {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
+        for key in sessionKeys { key.unregister() }
+        sessionKeys = []
         for overlay in overlays { overlay.orderOut(nil) }
         overlays = []
         modeBar?.orderOut(nil)
@@ -166,12 +178,16 @@ final class SelectionSession {
     }
 }
 
-final class OverlayWindow: NSWindow {
+/// A non-activating panel: it takes the keys (Esc, Space) and the mouse without bringing Navi to the
+/// front, so other Navi windows (an open markup editor) stay where they are.
+final class OverlayWindow: NSPanel {
     let overlayView: OverlayView
 
     init(screen: NSScreen, view: OverlayView) {
         overlayView = view
-        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        hidesOnDeactivate = false
+        becomesKeyOnlyIfNeeded = false
         setFrame(screen.frame, display: false)
         level = .screenSaver
         // Clear until the frozen image arrives, so the live screen shows through at once.

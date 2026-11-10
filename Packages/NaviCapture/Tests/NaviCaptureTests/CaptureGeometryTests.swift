@@ -76,4 +76,33 @@ import Testing
         #expect(CaptureGeometry.oppositeCorner(of: rect, near: CGPoint(x: 41, y: 31), tolerance: 8) == CGPoint(x: 10, y: 10))
         #expect(CaptureGeometry.oppositeCorner(of: rect, near: CGPoint(x: 25, y: 20), tolerance: 8) == nil)
     }
+
+    // Edit after capture: where the toolbar goes, in top-left coordinates.
+    private static let screen = CGSize(width: 1000, height: 800)
+    private static let bar = CGSize(width: 400, height: 40)
+
+    @Test func toolbarGoesBelowTheAreaWhenThereIsRoom() {
+        let area = CGRect(x: 300, y: 100, width: 200, height: 100)
+        let origin = CaptureGeometry.toolbarOrigin(below: area, toolbar: Self.bar, in: Self.screen, gap: 8, margin: 10)
+        #expect(origin == CGPoint(x: 200, y: 208))
+    }
+
+    @Test func toolbarGoesAboveTheAreaNearTheBottom() {
+        let area = CGRect(x: 300, y: 600, width: 200, height: 180)
+        let origin = CaptureGeometry.toolbarOrigin(below: area, toolbar: Self.bar, in: Self.screen, gap: 8, margin: 10)
+        #expect(origin == CGPoint(x: 200, y: 552))
+    }
+
+    @Test func toolbarGoesInsideTheAreaWhenItFillsTheScreen() {
+        let area = CGRect(origin: .zero, size: Self.screen)
+        let origin = CaptureGeometry.toolbarOrigin(below: area, toolbar: Self.bar, in: Self.screen, gap: 8, margin: 10)
+        #expect(origin == CGPoint(x: 300, y: 742))
+    }
+
+    @Test func toolbarStaysOnScreenAtTheSides() {
+        let left = CGRect(x: 0, y: 100, width: 50, height: 50)
+        let right = CGRect(x: 960, y: 100, width: 40, height: 50)
+        #expect(CaptureGeometry.toolbarOrigin(below: left, toolbar: Self.bar, in: Self.screen, gap: 8, margin: 10).x == 10)
+        #expect(CaptureGeometry.toolbarOrigin(below: right, toolbar: Self.bar, in: Self.screen, gap: 8, margin: 10).x == 590)
+    }
 }
