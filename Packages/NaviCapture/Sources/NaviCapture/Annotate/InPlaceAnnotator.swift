@@ -1,4 +1,6 @@
 import AppKit
+import Carbon.HIToolbox
+import NaviCore
 import SwiftUI
 import os
 
@@ -17,6 +19,10 @@ final class InPlaceAnnotator {
     private var window: InPlaceWindow?
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
+    private var activeObserver: NSObjectProtocol?
+    /// Return and Esc as Carbon hot keys until Navi is the active app. macOS may refuse
+    /// `NSApp.activate()`, and then no key event reaches the window or the local monitor.
+    private var fallbackKeys: [HotKey] = []
     private var colorPanelLevel: NSWindow.Level?
     /// Gets the result on Return or Copy, nil on Esc or Cancel. Runs once.
     private var onFinish: ((AnnotateEditor.Result?) -> Void)?
@@ -49,8 +55,14 @@ final class InPlaceAnnotator {
         // The color panel floats at a low level. Lift it above the overlay while it is open.
         colorPanelLevel = NSColorPanel.shared.level
         NSColorPanel.shared.level = InPlaceWindow.overlayLevel + 1
+        if !NSApp.isActive { registerFallbackKeys() }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.releaseFallbackKeys() }
+        }
         // ⌘Tab or a click in another app would leave the dim up with capture locked. Cancel instead.
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
@@ -66,6 +78,9 @@ final class InPlaceAnnotator {
         keyMonitor = nil
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
         resignObserver = nil
+        if let activeObserver { NotificationCenter.default.removeObserver(activeObserver) }
+        activeObserver = nil
+        releaseFallbackKeys()
         if let colorPanelLevel { NSColorPanel.shared.level = colorPanelLevel }
         colorPanelLevel = nil
         window?.orderOut(nil)
@@ -93,6 +108,29 @@ final class InPlaceAnnotator {
             }
             return handled ? nil : event
         }
+    }
+
+    private func registerFallbackKeys() {
+        let confirm: () -> Void = { [weak self] in self?.pressReturn() }
+        fallbackKeys = [
+            HotKey(keyCode: UInt32(kVK_Escape), modifiers: 0) { [weak self] in self?.pressEscape() },
+            HotKey(keyCode: UInt32(kVK_Return), modifiers: 0, action: confirm),
+            HotKey(keyCode: UInt32(kVK_ANSI_KeypadEnter), modifiers: 0, action: confirm),
+        ].compactMap { $0 }
+    }
+
+    /// Once Navi is active, the local key monitor has the keys and other apps get theirs back.
+    private func releaseFallbackKeys() {
+        for key in fallbackKeys { key.unregister() }
+        fallbackKeys = []
+    }
+
+    private func pressReturn() {
+        if model.textEdit != nil { model.finishText() } else if model.cropRect != nil { model.applyCrop() } else { finish(copying: true) }
+    }
+
+    private func pressEscape() {
+        if model.textEdit != nil { model.finishText() } else if model.cropRect != nil { model.cancelCrop() } else { finish(copying: false) }
     }
 
     private func handle(_ event: NSEvent) -> Bool {
