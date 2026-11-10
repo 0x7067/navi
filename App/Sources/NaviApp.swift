@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictation.stop()
         dictation.giveBackFnKey()
         recording.stop()
+        inbox.flush() // History saves run in the background; wait so the last change is on disk.
     }
 
     private func askAboutTalkToType() {

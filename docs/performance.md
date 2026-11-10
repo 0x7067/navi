@@ -35,7 +35,8 @@ Each size gets a fresh temporary directory, deleted at the end. The bench writes
 | Scenario | What it times |
 |---|---|
 | `load` | `Inbox(directory:limit:)`: reads and decodes `history.json`, then sorts |
-| `add` | `Inbox.add(text:)` on a full inbox, including the save of the whole file. The added item is removed outside the timer |
+| `add` | `Inbox.add(text:)` on a full inbox: what the main actor pays. The background save is handed off, not waited for. The added item is removed and flushed outside the timer |
+| `save-flush` | `Inbox.add(text:)` plus `Inbox.flush()`: the total persistence cost, including the background encode and write |
 | `search-common` | `Inbox.search("the")`, which matches most text items |
 | `search-rare` | `Inbox.search("quartz")`, which matches about 7% of text items |
 | `search-none` | `Inbox.search("zzqxv")`, which matches nothing |
@@ -129,3 +130,16 @@ Spread is run 2 against run 1, on the median. The target is within 15% for every
 - 1,000 items: every scenario but one is within 6%. `thumbnail-draw` moved 18.7% (11.0 ms to 9.0 ms), which misses the target. Two more runs at 1,000 items, not saved, gave 9.76 ms and 9.76 ms, so run 1 looks like an outlier: its p95 was 28.9 ms against 9.1 ms in run 2. The cause is not established. Compare `thumbnail-draw` changes with a fresh pair of runs before trusting a difference under 20%.
 
 No scenario has a median under 0.1 ms, so none is below timer resolution.
+
+## Saving
+
+`Inbox` used to encode all items and rewrite `history.json` on the main actor for every change. It now hands a snapshot to `HistoryWriter`, which encodes and writes on one serial background queue. A pending snapshot is replaced by a newer one, so bursts coalesce and the latest state wins. `Inbox.flush()` blocks until the last snapshot is written; the app calls it in `applicationWillTerminate`. `add` also inserts at its sorted position instead of sorting everything.
+
+Before is commit `3356977` (the baseline above), after is the change on `aba62bf`. The `add` scenario now measures the main-actor cost only; `save-flush` is the full cost and is about the old `add`.
+
+| 5,000 items | Before median (ms) | Before p95 (ms) | After median (ms) | After p95 (ms) |
+|---|---:|---:|---:|---:|
+| add | 35.937 | 37.624 | 0.502 | 0.594 |
+| save-flush | - | - | 33.921 | 35.227 |
+
+At 1,000 items `add` goes from 7.9 ms (p95 10.2) to 0.14 ms (p95 0.31), and at 200 items from 1.8 ms to 0.05 ms. The other scenarios are unchanged within noise (the second saved run was noisy on `search-*`). Saved runs: `2026-11-10T23.33.20-aba62bf.json` and `2026-11-10T23.33.30-aba62bf.json`.

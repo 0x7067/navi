@@ -3,25 +3,38 @@ import Testing
 @testable import NaviCore
 
 @MainActor
-struct InboxTests {
+final class InboxTests {
+    private var opened: [Inbox] = []
     let directory = FileManager.default.temporaryDirectory.appending(path: "NaviTests-\(UUID().uuidString)")
     let start = Date(timeIntervalSince1970: 1_000_000)
 
+    /// Waits for every background write, then removes the temp directory, so no late write recreates it.
+    isolated deinit {
+        opened.forEach { $0.flush() }
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func make(directory: URL, limit: Int = 200, beforeDeleting: (@Sendable () -> Void)? = nil) -> Inbox {
+        let inbox = Inbox(directory: directory, limit: limit, beforeDeleting: beforeDeleting)
+        opened.append(inbox)
+        return inbox
+    }
+
     @Test func newestTextComesFirst() {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         inbox.add(text: "one", now: start)
         inbox.add(text: "two", now: start + 1)
         #expect(inbox.items.map(\.text) == ["two", "one"])
     }
 
     @Test func blankTextIsIgnored() {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         #expect(inbox.add(text: "  \n ") == nil)
         #expect(inbox.items.isEmpty)
     }
 
     @Test func duplicateTextMovesToTopWithoutCopy() {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         let first = inbox.add(text: "one", now: start)
         inbox.add(text: "two", now: start + 1)
         let again = inbox.add(text: "one", now: start + 2)
@@ -33,7 +46,7 @@ struct InboxTests {
     }
 
     @Test func pasteMovesItemToTopWithoutCountingACopy() throws {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         let first = try #require(inbox.add(text: "one", now: start))
         inbox.add(text: "two", now: start + 1)
         inbox.touch(first.id, now: start + 2)
@@ -47,13 +60,13 @@ struct InboxTests {
         [{"id":"\(UUID().uuidString)","kind":"text","createdAt":0,"pinned":false,"text":"old","contentHash":"x"}]
         """
         try Data(old.utf8).write(to: directory.appending(path: "history.json"))
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         #expect(inbox.items.first?.copyCount == 1)
         #expect(inbox.items.first?.lastUsedAt == inbox.items.first?.createdAt)
     }
 
     @Test func pinnedItemsStayOnTopAndSurviveTheLimit() throws {
-        let inbox = Inbox(directory: directory, limit: 2)
+        let inbox = make(directory: directory, limit: 2)
         let pinned = try #require(inbox.add(text: "keep", now: start))
         inbox.togglePin(pinned.id)
         inbox.add(text: "a", now: start + 1)
@@ -63,7 +76,7 @@ struct InboxTests {
     }
 
     @Test func searchIgnoresCase() {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         inbox.add(text: "Hello World", now: start)
         inbox.add(text: "other", now: start + 1)
         #expect(inbox.search("hello").map(\.text) == ["Hello World"])
@@ -71,24 +84,26 @@ struct InboxTests {
     }
 
     @Test func historySurvivesRestart() {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         inbox.add(text: "saved", now: start)
-        let reopened = Inbox(directory: directory)
+        inbox.flush()
+        let reopened = make(directory: directory)
         #expect(reopened.items.map(\.text) == ["saved"])
     }
 
     @Test func removingAnImageDeletesItsFile() throws {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         let item = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .image))
         let url = try #require(inbox.fileURL(for: item))
         #expect(FileManager.default.fileExists(atPath: url.path))
         inbox.remove(item.id)
+        inbox.flush()
         #expect(!FileManager.default.fileExists(atPath: url.path))
         #expect(inbox.items.isEmpty)
     }
 
     @Test func clearKeepsPinnedItems() throws {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         let pinned = try #require(inbox.add(text: "keep", now: start))
         inbox.togglePin(pinned.id)
         inbox.add(text: "drop", now: start + 1)
@@ -97,7 +112,7 @@ struct InboxTests {
     }
 
     @Test func updatingAFileKeepsTheItemAndRemovingDeletesMarkup() throws {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         let item = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .screenshot))
         #expect(inbox.updateFile(item.id, data: Data([4, 5])))
         let url = try #require(inbox.fileURL(for: item))
@@ -108,13 +123,14 @@ struct InboxTests {
         let markup = inbox.markupURL(for: item.id)
         try FileManager.default.createDirectory(at: markup, withIntermediateDirectories: true)
         inbox.remove(item.id)
+        inbox.flush()
         #expect(!FileManager.default.fileExists(atPath: markup.path))
     }
 
     /// Two shots of the same pixels must be two items. Before, the second shot reused the first item,
     /// so its card opened the first shot's markup in the editor.
     @Test func sameCaptureTwiceMakesTwoItemsWhenNotDeduplicated() throws {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         let png = Data([1, 2, 3])
         let first = try #require(inbox.add(fileData: png, fileExtension: "png", kind: .screenshot, deduplicate: false, now: start))
         let second = try #require(inbox.add(fileData: png, fileExtension: "png", kind: .screenshot, deduplicate: false, now: start + 1))
@@ -124,10 +140,110 @@ struct InboxTests {
     }
 
     @Test func sameFileTwiceIsDeduplicatedByDefault() throws {
-        let inbox = Inbox(directory: directory)
+        let inbox = make(directory: directory)
         let first = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .image, now: start))
         let again = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .image, now: start + 1))
         #expect(again.id == first.id)
         #expect(inbox.items.count == 1)
+    }
+
+    private func diskItems() throws -> [CaptureItem] {
+        try JSONDecoder().decode([CaptureItem].self, from: Data(contentsOf: directory.appending(path: "history.json")))
+    }
+
+    @Test func flushWritesFileThatRoundTrips() throws {
+        let inbox = make(directory: directory)
+        inbox.add(text: "one", now: start)
+        inbox.flush()
+        #expect(try diskItems() == inbox.items)
+    }
+
+    @Test func rapidAddsThenFlushMatchMemory() throws {
+        let inbox = make(directory: directory, limit: 1000)
+        for index in 0..<300 { inbox.add(text: "item \(index)", now: start + Double(index)) }
+        inbox.flush()
+        #expect(inbox.items.count == 300)
+        #expect(try diskItems() == inbox.items)
+        #expect(make(directory: directory, limit: 1000).items == inbox.items)
+    }
+
+    @Test func removeAfterAddsFlushesLatestState() throws {
+        let inbox = make(directory: directory)
+        let first = inbox.add(text: "one", now: start)
+        inbox.add(text: "two", now: start + 1)
+        inbox.remove(first!.id)
+        inbox.flush()
+        #expect(try diskItems().map(\.text) == ["two"])
+    }
+
+    @Test func imageFileExistsOnDiskAfterFlush() throws {
+        let inbox = make(directory: directory)
+        let item = try #require(inbox.add(fileData: Data([1, 2, 3]), fileExtension: "png", kind: .screenshot))
+        inbox.flush()
+        let reopened = make(directory: directory)
+        #expect(reopened.items == inbox.items)
+        #expect(reopened.fileData(for: item.id) == Data([1, 2, 3]))
+    }
+
+    @Test func removedFileIsDeletedAndNotReferenced() throws {
+        let inbox = make(directory: directory)
+        let item = try #require(inbox.add(fileData: Data([9]), fileExtension: "png", kind: .screenshot))
+        let url = try #require(inbox.fileURL(for: item))
+        inbox.remove(item.id)
+        inbox.flush()
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(try diskItems().isEmpty)
+    }
+
+    @Test func fileIsDeletedOnlyAfterJSONIsWritten() throws {
+        let probe = Probe()
+        let inbox = make(directory: directory, beforeDeleting: { probe.check() })
+        let item = try #require(inbox.add(fileData: Data([9]), fileExtension: "png", kind: .screenshot))
+        inbox.flush()
+        let url = try #require(inbox.fileURL(for: item))
+        probe.watch(directory: directory, file: url)
+        inbox.remove(item.id)
+        inbox.flush()
+        let seen = probe.observations
+        #expect(!seen.isEmpty)
+        #expect(seen.allSatisfy { $0.fileStillExists && !$0.jsonReferencesFile })
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test func addRemoveBurstsLeaveDiskEqualToMemory() throws {
+        let inbox = make(directory: directory, limit: 5)
+        for index in 0..<60 {
+            let item = inbox.add(fileData: Data([UInt8(index)]), fileExtension: "png", kind: .screenshot,
+                                 deduplicate: false, now: start + Double(index))
+            if index % 3 == 0, let item { inbox.remove(item.id) }
+        }
+        inbox.flush()
+        #expect(try diskItems() == inbox.items)
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory.appending(path: "files").path)
+        #expect(Set(files) == Set(inbox.items.compactMap(\.fileName)))
+    }
+}
+
+/// Records, each time the writer is about to delete, whether the file still exists and the JSON references it.
+private final class Probe: @unchecked Sendable {
+    struct Observation { var fileStillExists: Bool, jsonReferencesFile: Bool }
+    private let lock = NSLock()
+    private var target: (directory: URL, file: URL)?
+    private var seen: [Observation] = []
+
+    var observations: [Observation] { lock.withLock { seen } }
+
+    func watch(directory: URL, file: URL) { lock.withLock { target = (directory, file) } }
+
+    func check() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let target else { return }
+        let data = (try? Data(contentsOf: target.directory.appending(path: "history.json"))) ?? Data()
+        let items = (try? JSONDecoder().decode([CaptureItem].self, from: data)) ?? []
+        seen.append(Observation(
+            fileStillExists: FileManager.default.fileExists(atPath: target.file.path),
+            jsonReferencesFile: items.contains { $0.fileName == target.file.lastPathComponent }
+        ))
     }
 }

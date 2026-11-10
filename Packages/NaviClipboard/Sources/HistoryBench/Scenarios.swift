@@ -51,6 +51,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     let add = sample(runs, prepare: {
         if let id = added {
             inbox.remove(id)
+            inbox.flush() // Outside the timer: each timed add starts with an idle writer.
             added = nil
         }
     }, run: { _ in
@@ -59,7 +60,25 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
         return 1
     })
     if let id = added { inbox.remove(id) }
+    inbox.flush()
     scenarios.append(ScenarioResult(name: "add", milliseconds: add.milliseconds))
+
+    // Total persistence cost: the add plus waiting for the background write to land.
+    let saveFlush = sample(runs, prepare: {
+        if let id = added {
+            inbox.remove(id)
+            inbox.flush()
+            added = nil
+        }
+    }, run: { _ in
+        counter += 1
+        added = inbox.add(text: "bench add \(counter) " + filler)?.id
+        inbox.flush()
+        return 1
+    })
+    if let id = added { inbox.remove(id) }
+    inbox.flush()
+    scenarios.append(ScenarioResult(name: "save-flush", milliseconds: saveFlush.milliseconds))
 
     for (name, query) in [("search-common", "the"), ("search-rare", "quartz"), ("search-none", "zzqxv")] {
         let result = sample(runs, prepare: { () }, run: { _ in inbox.search(query).count })

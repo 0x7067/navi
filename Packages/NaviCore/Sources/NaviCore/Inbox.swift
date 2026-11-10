@@ -14,6 +14,9 @@ public final class Inbox {
     public let directory: URL
     public var limit: Int
 
+    @ObservationIgnored private let writer: HistoryWriter
+    /// Files of removed items, handed to the writer with the next save so they go after the JSON.
+    @ObservationIgnored private var doomedFiles: [URL] = []
     @ObservationIgnored private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Inbox")
     private static let signposter = OSSignposter(subsystem: "com.donovanhiland.navi", category: "History")
 
@@ -23,10 +26,21 @@ public final class Inbox {
         return URL.applicationSupportDirectory.appending(path: name, directoryHint: .isDirectory)
     }
 
-    public init(directory: URL = Inbox.defaultDirectory, limit: Int = 200) {
+    public convenience init(directory: URL = Inbox.defaultDirectory, limit: Int = 200) {
+        self.init(directory: directory, limit: limit, beforeDeleting: nil)
+    }
+
+    /// `beforeDeleting` is a test seam: it runs on the writer queue after a snapshot is written, before its deletions.
+    init(directory: URL, limit: Int, beforeDeleting: (@Sendable () -> Void)?) {
         self.directory = directory
         self.limit = limit
+        self.writer = HistoryWriter(directory: directory, beforeDeleting: beforeDeleting)
         load()
+    }
+
+    /// Blocks until the latest history is on disk. Call it when the app quits; saves otherwise run in the background.
+    public func flush() {
+        writer.flush()
     }
 
     // MARK: Adding
@@ -167,8 +181,10 @@ public final class Inbox {
     }
 
     private func insert(_ item: CaptureItem) {
-        items.append(item)
-        trimSortAndSave()
+        // A new item is unpinned and normally newest, so an ordered insert replaces the full sort.
+        let index = items.firstIndex { !$0.pinned && $0.lastUsedAt < item.lastUsedAt } ?? items.count
+        items.insert(item, at: index)
+        trimAndSave()
     }
 
     private func sortAndSave() {
@@ -178,6 +194,10 @@ public final class Inbox {
 
     private func trimSortAndSave() {
         sort()
+        trimAndSave()
+    }
+
+    private func trimAndSave() {
         var unpinnedCount = 0
         var kept: [CaptureItem] = []
         for item in items {
@@ -204,10 +224,9 @@ public final class Inbox {
     }
 
     private func deleteFile(of item: CaptureItem) {
-        try? FileManager.default.removeItem(at: markupURL(for: item.id))
-        try? FileManager.default.removeItem(at: previewURL(for: item.id))
-        guard let url = fileURL(for: item) else { return }
-        try? FileManager.default.removeItem(at: url)
+        doomedFiles.append(markupURL(for: item.id))
+        doomedFiles.append(previewURL(for: item.id))
+        if let url = fileURL(for: item) { doomedFiles.append(url) }
     }
 
     private func load() {
@@ -221,15 +240,8 @@ public final class Inbox {
     }
 
     private func save() {
-        let interval = Self.signposter.beginInterval("InboxSave")
-        defer { Self.signposter.endInterval("InboxSave", interval) }
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(items)
-            try data.write(to: historyURL, options: .atomic)
-        } catch {
-            logger.error("Could not save history: \(error.localizedDescription)")
-        }
+        writer.write(items, deleting: doomedFiles)
+        doomedFiles = []
     }
 
     private static func hash(_ data: Data) -> String {
