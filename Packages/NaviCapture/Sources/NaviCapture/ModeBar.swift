@@ -88,13 +88,14 @@ private struct ModeBarView: View {
         .environment(\.colorScheme, .dark)
     }
 
-    /// The main action for the held area: Capture, Record, Copy Text, or Scroll. Return does the same.
+    /// The main action for the held area: Capture, Start Recording, Copy Text, or Start Scrolling. Return does the same.
     private func confirmButton(_ purpose: SelectionSession.Purpose, action: @escaping () -> Void) -> some View {
         let (title, symbol, color): (String, String, Color) = switch purpose {
+        // Verbs, so they do not repeat the mode names in the bar (Record, Text, Scrolling).
         case .screenshot: ("Capture", "camera.fill", .accentColor)
-        case .record: ("Record", "record.circle.fill", .red)
+        case .record: ("Start Recording", "record.circle.fill", .red)
         case .text: ("Copy Text", "doc.on.doc.fill", .accentColor)
-        case .scroll: ("Scroll", "arrow.up.and.down", .accentColor)
+        case .scroll: ("Start Scrolling", "arrow.up.and.down", .accentColor)
         }
         return Button(action: action) {
             Label(title, systemImage: symbol)

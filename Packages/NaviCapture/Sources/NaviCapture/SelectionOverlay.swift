@@ -126,7 +126,7 @@ final class SelectionSession {
             case .screenshot: "capture"
             case .text: "copy the text"
             case .scroll: "start scrolling"
-            case .record: "record"
+            case .record: "start recording"
             }
             return "Return to \(verb)  ·  Drag inside to move, corners to resize  ·  Esc to cancel"
         }
