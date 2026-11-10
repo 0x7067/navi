@@ -176,8 +176,7 @@ brew install xcodegen
 git clone https://github.com/donovanhiland/navi.git
 cd navi
 xcodegen generate
-xcodebuild -project Navi.xcodeproj -scheme Navi -configuration Debug -derivedDataPath build build
-open build/Build/Products/Debug/Navi.app
+scripts/dev.sh
 ```
 
 Signing is set up for one developer team in `project.yml`. To build on your

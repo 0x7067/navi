@@ -16,8 +16,10 @@ public final class Inbox {
 
     @ObservationIgnored private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Inbox")
 
+    /// `~/Library/Application Support/Navi`. The test app, Navi Dev, keeps its own history in "Navi Dev".
     public static var defaultDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "Navi", directoryHint: .isDirectory)
+        let name = Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true ? "Navi Dev" : "Navi"
+        return URL.applicationSupportDirectory.appending(path: name, directoryHint: .isDirectory)
     }
 
     public init(directory: URL = Inbox.defaultDirectory, limit: Int = 200) {
