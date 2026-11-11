@@ -15,7 +15,7 @@ cd Packages/NaviClipboard && swift run -c release history-bench --save
 | `--sizes 200,1000,5000` | 200,1000,5000 | History sizes to seed and time |
 | `--iterations N` | 20 | Timed runs per scenario at 1,000 items and up, after three discarded warm-up runs. Smaller sizes get more, see below |
 | `--seed N` | 42 | Seed for the synthetic history. The same seed gives the same content |
-| `--corpus ascii\|pt\|mixed` | ascii | Language of the seeded text. `pt` uses Portuguese words and about 60% of text items contain accented words (ã õ ç é ê á í ó ú à), and 25% end with mixed scripts, emoji, symbols and numbers. `mixed` seeds Cyrillic, Japanese, Arabic, Hindi and emoji items, one script per item |
+| `--corpus ascii\|mixed` | ascii | Language of the seeded text. `mixed` seeds accented Latin (ã õ ç é ê á í ó ú à), Cyrillic, Japanese, Arabic, Hindi and emoji items, one script per item |
 | `--json` | off | Print the report as JSON instead of a table |
 | `--save` | off | Write `Bench/results/<date>-<commit>.json` (date to the second, commit = short HEAD when run) |
 
@@ -45,14 +45,9 @@ Each size gets a fresh temporary directory, deleted at the end. The bench writes
 | `search-accent-on-ascii` | `Inbox.search("ação")` on the ASCII corpus |
 | `search-cold`, `search-warmup` | The first search on a fresh inbox, and the background key build; see Search below |
 | `search-cold-huge` | The first search (`привет`) on a fresh inbox that also holds a 2 MB text with no key yet. That text must be left out and counted as deferred, not folded |
-| `search-pt-common`, `-rare`, `-none` | With `--corpus pt`: `search("de")`, `("quartzo")` and `("zzqxv")` |
-| `search-pt-accent`, `-accent2` | With `--corpus pt`: `search("ação")` and `("Reunião")` |
-| `search-pt-digit`, `-digit2` | With `--corpus pt`: `search("9999")` and `("v2")` |
-| `search-pt-mixed`, `-emoji` | With `--corpus pt`: `search("テキスト")` and `("😀")`. A quarter of the items end with Japanese, Cyrillic, emoji with a skin tone, `nº` and `€10` |
-| `search-pt-cold-rare`, `-cold-accent`, `-cold-digit`, `-cold-mixed` | With `--corpus pt`: the first search on a fresh inbox, for `quartzo`, `ação`, `9999` and `テキスト` |
-| `search-mixed-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji`, `-none` | With `--corpus mixed`: a word in each script, `😀`, and `zzqxv` |
+| `search-mixed-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji`, `-accent`, `-none` | With `--corpus mixed`: a word in each script, `😀`, `acao` (finds `ação`), and `zzqxv` |
 | `search-mixed-cold-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji` | With `--corpus mixed`: the first search on a fresh inbox. The `deferred` column is how many items it left out |
-| `results` | `ClipboardModel.results` with the query `the` (`de` with `--corpus pt`, `привет` with `--corpus mixed`): the search plus model overhead |
+| `results` | `ClipboardModel.results` with the query `the` (`привет` with `--corpus mixed`): the search plus model overhead |
 | `thumbnail-open` | `ClipboardModel.image(for:)` on an image item. A new model per run, so the cache is always empty. `NSImage` reads the file lazily, so this covers reading the file and creating the image. The pixel decode is not included |
 | `thumbnail-draw` | `ClipboardModel.image(for:)` on an uncached image item, then a draw into a 2× bitmap of the row frame (200×40 points, aspect fit, as `ClipboardListView` shows it). The draw forces the pixel decode that a row pays on first paint |
 
@@ -85,11 +80,11 @@ Open the `.trace` file in Instruments. In the `os_signpost` track, filter by sub
 
 ## Current numbers
 
-Goal: every main-thread scenario has a p95 under 16.6 ms (one 60 Hz frame) at 200, 1,000 and 5,000 items, on all three corpora. **Met:** every main-thread scenario is under the goal at every size and corpus. The worst main-thread p95 is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items).
+Goal: every main-thread scenario has a p95 under 16.6 ms (one 60 Hz frame) at 200, 1,000 and 5,000 items, on both corpora. **Met:** every main-thread scenario is under the goal at every size and corpus. The worst main-thread p95 is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items).
 
 Background rows (`save-flush`, `search-warmup`) run off the main thread. They show total cost only and are not held to the goal.
 
-Recorded at commit `07feca8` on Apple M4 Pro, macOS 27.2, release build, seed 42, default iterations. Runs: `2026-11-11T02.30.10-07feca8.json` (ascii), `2026-11-11T02.30.37-07feca8.json` (pt) and `2026-11-11T02.32.12-07feca8.json` (mixed). All times in ms.
+Recorded at commit `07feca8` on Apple M4 Pro, macOS 27.2, release build, seed 42, default iterations. Runs: `2026-11-11T02.30.10-07feca8.json` (ascii) and `2026-11-11T02.32.12-07feca8.json` (mixed). All times in ms.
 
 ### ascii corpus (`2026-11-11T02.30.10-07feca8.json`)
 
@@ -109,33 +104,6 @@ Recorded at commit `07feca8` on Apple M4 Pro, macOS 27.2, release build, seed 42
 | `results` | 0.052 | 0.055 | 0.279 | 0.296 | 1.468 | 1.506 |
 | `thumbnail-open` | 0.121 | 0.131 | 0.133 | 0.145 | 0.124 | 0.137 |
 | `thumbnail-draw` | 1.489 | 1.648 | 8.384 | 8.703 | 1.508 | 1.539 |
-
-### pt corpus (`2026-11-11T02.30.37-07feca8.json`)
-
-| Scenario | 200 med | 200 p95 | 1,000 med | 1,000 p95 | 5,000 med | 5,000 p95 |
-|---|---:|---:|---:|---:|---:|---:|
-| `load` | 0.769 | 0.808 | 1.269 | 1.358 | 5.512 | 7.107 |
-| `add` | 0.069 | 0.091 | 0.273 | 0.285 | 1.402 | 1.816 |
-| `save-flush` (background, not main thread) | 1.624 | 1.661 | 7.014 | 7.625 | 34.526 | 35.859 |
-| `add-large-mixed` | 0.929 | 1.150 | 1.115 | 1.244 | 2.132 | 2.346 |
-| `search-pt-common` | 0.041 | 0.042 | 0.198 | 0.427 | 0.955 | 1.021 |
-| `search-pt-rare` | 0.205 | 0.228 | 0.956 | 0.958 | 4.776 | 4.900 |
-| `search-pt-none` | 0.195 | 0.196 | 0.913 | 0.919 | 4.535 | 4.828 |
-| `search-pt-accent` | 0.194 | 0.201 | 0.946 | 0.948 | 4.662 | 4.752 |
-| `search-pt-accent2` | 0.039 | 0.039 | 0.209 | 0.211 | 1.113 | 1.181 |
-| `search-pt-digit` | 0.187 | 0.190 | 0.873 | 0.876 | 4.371 | 4.740 |
-| `search-pt-digit2` | 0.242 | 0.254 | 1.131 | 1.133 | 5.327 | 5.369 |
-| `search-pt-mixed` | 0.192 | 0.219 | 0.867 | 0.878 | 4.027 | 4.043 |
-| `search-pt-emoji` | 0.190 | 0.207 | 0.874 | 0.911 | 4.086 | 4.315 |
-| `search-pt-cold-rare` | 1.643 | 5.830 | 6.029 | 7.310 | 6.102 | 6.112 |
-| `search-pt-cold-accent` | 1.399 | 1.796 | 5.352 | 6.051 | 6.116 | 6.137 |
-| `search-pt-cold-digit` | 0.490 | 0.587 | 2.445 | 2.516 | 6.108 | 6.124 |
-| `search-pt-cold-mixed` | 0.512 | 0.606 | 2.506 | 2.608 | 6.109 | 6.114 |
-| `search-cold-huge` | 0.660 | 0.749 | 3.475 | 3.689 | 6.116 | 6.174 |
-| `search-warmup` (background, not main thread) | 0.288 | 0.309 | 1.638 | 1.899 | 10.971 | 11.373 |
-| `results` | 0.040 | 0.041 | 0.188 | 0.199 | 0.962 | 0.974 |
-| `thumbnail-open` | 0.124 | 0.135 | 0.127 | 0.139 | 0.126 | 0.133 |
-| `thumbnail-draw` | 1.534 | 1.684 | 1.526 | 1.553 | 8.468 | 9.481 |
 
 ### mixed corpus (`2026-11-11T02.32.12-07feca8.json`)
 
@@ -264,14 +232,14 @@ How it works (`SearchCache`, `SearchFold`):
 - Until the keys exist, a search builds missing ones up to 16 KB itself, but only for `Inbox.searchBudget` (6 ms, on a monotonic clock). Items still without a key when that runs out are left out of that search and counted in `Inbox.deferredSearchItems`; they are never dropped for good. Each installed batch changes `Inbox.searchKeysVersion`, which `search` reads, so `ClipboardModel.results` and the list that shows it recompute by themselves and the results fill in. In practice that is a few milliseconds for Latin text and about 0.2 s for 5,000 Arabic, Hindi or Japanese items, only for the first search after launch.
 - The system-fold caches are bounded: the scalar cache clears at 16,384 entries, the cluster cache at 2,048, and clusters over 64 bytes are not cached, so stacks of combining marks cannot grow them.
 
-What the new search no longer matches that the old one did, from a one-off check of 1.5 million random query and text pairs in en_US, pt_BR and de_DE (0.06% of pairs with realistic characters, 0.5% with the exotic ones): compatibility forms of digits (`1` finding `¹` or `①`, `２` finding `²`), `ß` finding a single `s`, composed Hangul or kana (`가` finding `ᄀ`+`ᅡ`, `ガ` finding `カ` + voicing mark) when the other form has the pieces, and queries that are only combining marks, zero-width characters or Devanagari/Arabic marks. Plain Portuguese, English and accented text lost nothing. It matches more: for example `Reuniao` finds `Reunião`, and accents are ignored when the query has a digit.
+What the new search no longer matches that the old one did, from a one-off check of 1.5 million random query and text pairs in en_US, pt_BR and de_DE (0.06% of pairs with realistic characters, 0.5% with the exotic ones): compatibility forms of digits (`1` finding `¹` or `①`, `２` finding `²`), `ß` finding a single `s`, composed Hangul or kana (`가` finding `ᄀ`+`ᅡ`, `ガ` finding `カ` + voicing mark) when the other form has the pieces, and queries that are only combining marks, zero-width characters or Devanagari/Arabic marks. Plain English and accented text lost nothing. It matches more: for example `Reuniao` finds `Reunião`, and accents are ignored when the query has a digit.
 
 | Scenario | What it times |
 |---|---|
 | `search-cold` | A fresh `Inbox` from disk, then the first search at once. Only main-actor work is timed; the background build runs beside it |
 | `search-warmup` | From the end of `Inbox.init` until the background build has installed every key |
 
-Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe147`; current numbers are under Current numbers. Before is the original filter (ASCII baseline above, run 2). After is three runs at `6ebe147` (default corpus, `--corpus pt` and `--corpus mixed`), not kept in the repository. The previous version of this change had `search-pt-rare` at about 47 ms, `search-pt-none` at 49, `search-pt-accent` at 25 and `search-pt-accent2` at 36 on a similar Portuguese history; those were review measurements, not saved.
+Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe147`; current numbers are under Current numbers. Before is the original filter (ASCII baseline above, run 2). After is two runs at `6ebe147` (default corpus and `--corpus mixed`), not kept in the repository.
 
 | Scenario | Before median | Before p95 | After median | After p95 | Deferred |
 |---|---:|---:|---:|---:|---:|
@@ -282,17 +250,6 @@ Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe1
 | results | 8.427 | 8.809 | 1.457 | 1.556 | |
 | search-cold | n/a | n/a | 3.983 | 4.354 | 0 |
 | search-warmup (background) | n/a | n/a | 4.683 | 4.894 | |
-| search-pt-common | | | 0.940 | 0.954 | |
-| search-pt-rare | | | 4.317 | 4.360 | |
-| search-pt-none | | | 4.147 | 4.187 | |
-| search-pt-accent | | | 4.252 | 4.366 | |
-| search-pt-digit2 | | | 5.211 | 5.237 | |
-| search-pt-mixed | | | 3.932 | 4.107 | |
-| search-pt-cold-rare | | | 6.094 | 6.098 | 2597 |
-| search-pt-cold-accent | | | 6.113 | 6.132 | 2607 |
-| search-pt-cold-digit | | | 6.104 | 6.172 | 2618 |
-| search-pt-cold-mixed | | | 6.107 | 6.144 | 2677 |
-| search-warmup, pt (background) | | | 10.130 | 10.785 | |
 | search-mixed-cyrillic | | | 6.178 | 6.241 | |
 | search-mixed-none | | | 7.646 | 7.681 | |
 | results, mixed corpus | | | 9.676 | 9.994 | |
@@ -303,7 +260,7 @@ Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe1
 | search-mixed-cold-emoji | | | 6.232 | 6.481 | 4924 |
 | search-warmup, mixed (background) | | | 223.717 | 225.496 | |
 
-Every search scenario, cold included, is under 16.6 ms at p95 at 200, 1,000 and 5,000 items on all three corpora; the worst is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items, a warm `memmem` over 22 MB of keys) on `07feca8`, see Current numbers. The cold searches stay near the 6 ms budget whatever the script. The warm-up rows run on a background thread, not the main actor. `load`, `add` and the thumbnail scenarios do not touch this code and are within noise of the baseline.
+Every search scenario, cold included, is under 16.6 ms at p95 at 200, 1,000 and 5,000 items on both corpora; the worst is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items, a warm `memmem` over 22 MB of keys) on `07feca8`, see Current numbers. The cold searches stay near the 6 ms budget whatever the script. The warm-up rows run on a background thread, not the main actor. `load`, `add` and the thumbnail scenarios do not touch this code and are within noise of the baseline.
 
 ### Bench isolation for `load` and the cold searches
 

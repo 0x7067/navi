@@ -250,23 +250,11 @@ private struct SearchQueries {
             ]
             cold = [("search-cold", "the")]
             results = "the"
-        case .pt:
-            warm = [
-                ("search-pt-common", "de"), ("search-pt-rare", "quartzo"), ("search-pt-none", "zzqxv"),
-                ("search-pt-accent", "ação"), ("search-pt-accent2", "Reunião"),
-                ("search-pt-digit", "9999"), ("search-pt-digit2", "v2"),
-                ("search-pt-mixed", "テキスト"), ("search-pt-emoji", "😀"),
-            ]
-            cold = [
-                ("search-pt-cold-rare", "quartzo"), ("search-pt-cold-accent", "ação"),
-                ("search-pt-cold-digit", "9999"), ("search-pt-cold-mixed", "テキスト"),
-            ]
-            results = "de"
         case .mixed:
             warm = [
                 ("search-mixed-cyrillic", "привет"), ("search-mixed-japanese", "テキスト"),
                 ("search-mixed-arabic", "مرحبا"), ("search-mixed-hindi", "नमस्ते"), ("search-mixed-emoji", "😀"),
-                ("search-mixed-none", "zzqxv"),
+                ("search-mixed-accent", "acao"), ("search-mixed-none", "zzqxv"),
             ]
             cold = [
                 ("search-mixed-cold-cyrillic", "привет"), ("search-mixed-cold-japanese", "テキスト"),

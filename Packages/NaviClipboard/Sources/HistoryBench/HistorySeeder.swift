@@ -14,25 +14,12 @@ enum HistorySeeder {
         "panel", "markup", "overlay", "capture", "history", "search", "paste", "folder", "version", "summary",
     ]
     static let rareWord = "quartz"
-    /// Portuguese words without accents, for the `pt` corpus. `de` is common and `quartzo` is rare.
-    static let portugueseVocabulary = [
-        "de", "que", "para", "com", "uma", "reuniao", "relatorio", "projeto", "cliente", "email",
-        "servidor", "backup", "orcamento", "rascunho", "versao", "pasta", "janela", "painel", "captura", "historico",
-        "busca", "arquivo", "tabela", "equipe", "prazo", "revisao", "contrato", "viagem", "almoco", "resumo",
-    ]
-    /// Portuguese words with ã õ ç é ê á í ó ú à, for the `pt` corpus.
+    /// Accented Latin words: ã õ ç é ê á í ó ú à.
     static let accentedVocabulary = [
         "ação", "informação", "reunião", "não", "São", "Paulo", "configuração", "título", "área", "você",
         "também", "até", "versão", "é", "às", "opção", "atenção", "câmera", "médico", "coração",
         "Reunião", "avaliação", "prática", "número", "histórico", "só", "relatório", "orçamento", "ênfase", "atenção",
     ]
-    static let portugueseRareWord = "quartzo"
-    /// Appended to a share of `pt` text items: other scripts, emoji with a skin tone, symbols and numbers.
-    static let mixedScriptSuffix = " 日本語のテキスト Привет мир 😀 👍🏽 nº €10 v2 9999"
-    /// Share of `pt` text items that get `mixedScriptSuffix`, in percent.
-    static let mixedScriptPercent = 25
-    /// Share of `pt` text items that contain accented words, in percent.
-    static let accentedPercent = 60
     static let sourceApps = ["Safari", "Notes", "Xcode", "Mail", "Terminal"]
     /// Two large and two small pictures, rendered once and reused for every image item.
     static let pictureSizes = [
@@ -81,6 +68,7 @@ enum HistorySeeder {
     /// One word list per script for the `mixed` corpus. Arabic has vowel marks, Hindi has combining signs,
     /// and the emoji include a skin tone, a flag and a family sequence.
     static let mixedVocabularies: [[String]] = [
+        accentedVocabulary,
         ["привет", "мир", "отчёт", "проект", "встреча", "бюджет", "клиент", "сервер", "резервная", "копия", "окно",
          "панель", "история", "поиск", "файл", "таблица", "команда", "срок", "договор", "поездка"],
         ["日本語", "テキスト", "報告書", "会議", "予算", "設計", "確認", "メモ", "草稿", "顧客", "更新", "計画", "出張",
@@ -95,7 +83,6 @@ enum HistorySeeder {
     private static func makeText(for corpus: Corpus, index: Int, _ random: inout LCG) -> String {
         switch corpus {
         case .ascii: makeText(index: index, &random)
-        case .pt: makePortugueseText(index: index, &random)
         case .mixed: makeMixedText(index: index, &random)
         }
     }
@@ -125,30 +112,6 @@ enum HistorySeeder {
             length += word.count + 1
         }
         return String(text.prefix(target))
-    }
-
-    /// Like `makeText`, in Portuguese. Items chosen as accented use accented words one time in four and always have one.
-    /// Items chosen as mixed end with `mixedScriptSuffix`.
-    private static func makePortugueseText(index: Int, _ random: inout LCG) -> String {
-        let target = 20 + random.below(3981)
-        let accented = random.below(100) < accentedPercent
-        let mixed = random.below(100) < mixedScriptPercent
-        var text = "#\(index)"
-        var length = text.count
-        while length < target {
-            let word: String
-            if accented && random.below(4) == 0 {
-                word = accentedVocabulary[random.below(accentedVocabulary.count)]
-            } else if random.below(4000) == 0 {
-                word = portugueseRareWord
-            } else {
-                word = portugueseVocabulary[random.below(portugueseVocabulary.count)]
-            }
-            text += " " + word
-            length += word.count + 1
-        }
-        let clipped = String(text.prefix(target)) + (mixed ? mixedScriptSuffix : "")
-        return accented && clipped.allSatisfy(\.isASCII) ? clipped + " ação" : clipped
     }
 
     /// A picture of random colored rectangles, encoded as PNG.

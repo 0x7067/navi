@@ -24,7 +24,7 @@ struct BenchOptions {
             case "--corpus":
                 let text = try Self.value(flag, &remaining)
                 guard let chosen = Corpus(rawValue: text) else {
-                    throw BenchError.usage("--corpus needs ascii, pt or mixed, got \(text)")
+                    throw BenchError.usage("--corpus needs ascii or mixed, got \(text)")
                 }
                 corpus = chosen
             case "--save": save = true
@@ -51,9 +51,7 @@ struct BenchOptions {
 enum Corpus: String {
     /// English words, all ASCII.
     case ascii
-    /// Portuguese words; about 60% of text items contain accented words.
-    case pt
-    /// Cyrillic, Japanese, Arabic, Hindi and emoji-heavy text items, one script per item.
+    /// Accented Latin, Cyrillic, Japanese, Arabic, Hindi and emoji-heavy text items, one script per item.
     case mixed
 }
 
