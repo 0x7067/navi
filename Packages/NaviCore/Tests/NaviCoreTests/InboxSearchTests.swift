@@ -70,7 +70,7 @@ struct InboxSearchTests {
         #expect(inbox.search("v3").isEmpty)
     }
 
-    @Test func findsEverythingTheSystemSearchFindsInPortugueseText() {
+    @Test func findsEverythingTheSystemSearchFindsInAccentedText() {
         let words = [
             "ação", "informação", "Reunião", "não", "São Paulo", "configuração", "título", "área", "você", "também",
             "opção", "câmera", "médico", "coração", "relatorio", "reuniao", "acao", "de", "para", "projeto 2024", "v2",
@@ -227,7 +227,6 @@ struct InboxSearchTests {
     @Test func combiningMarkStacksDoNotGrowTheFoldCaches() {
         let huge = "é" + String(repeating: "\u{301}", count: 5000)
         #expect(SearchFold.fold(huge) == SearchFold.reference(huge))
-        // Many different short clusters, more than the cluster cache holds.
         for base in 0x80..<0x300 {
             guard let scalar = Unicode.Scalar(base) else { continue }
             for mark in 0x300..<0x370 {

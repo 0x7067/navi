@@ -1,18 +1,9 @@
 import Foundation
 import os
 
-/// Encodes and writes `history.json` off the main actor.
-///
-/// Ordering: every snapshot goes through one slot (`pending`) and one serial queue. A newer snapshot
-/// replaces an older one that has not started writing, so bursts coalesce and the latest wins. The serial
-/// queue runs one drain at a time, and each drain takes whatever is newest at that moment, so an older
-/// snapshot can never overwrite a newer one. `flush()` waits on the same queue, so when it returns
-/// every snapshot handed over before the call is on disk.
-///
-/// Deletions: files of removed items are deleted only after a snapshot that no longer references them
-/// is written atomically, so a crash leaves an orphan file, never a dangling reference. Deletions from
-/// coalesced snapshots accumulate and run after the newest snapshot. A file the written snapshot still
-/// references is skipped. `flush()` waits for deletions too.
+/// Encodes and writes `history.json` off the main actor. The newest snapshot wins on one serial queue.
+/// Files of removed items are deleted only after the snapshot that drops them is written, so a crash leaves an
+/// orphan, never a dangling reference.
 final class HistoryWriter: Sendable {
     private struct State {
         var pending: [CaptureItem]?

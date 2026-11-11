@@ -71,9 +71,8 @@ extension CaptureItem {
     /// Histories below this size decode on one thread; splitting costs more than it saves.
     private static let parallelThreshold = 512 * 1024
 
-    /// Decodes a `history.json` payload. A big file is cut at item boundaries and the pieces decode in
-    /// parallel. If the file is not in the compact form `JSONEncoder` writes, or a piece fails, it decodes
-    /// whole, so the result and the errors match a plain `JSONDecoder`.
+    /// Decodes a `history.json` payload. A big file is cut at item boundaries and decoded in parallel; if the file is not
+    /// compact `JSONEncoder` output or a piece fails, it decodes whole so results and errors match `JSONDecoder`.
     nonisolated static func decodeHistory(from data: Data) throws -> [CaptureItem] {
         if data.count >= parallelThreshold, let items = decodeInParallel(data) { return items }
         return try JSONDecoder().decode([CaptureItem].self, from: data)

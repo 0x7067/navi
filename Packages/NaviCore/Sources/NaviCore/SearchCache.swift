@@ -1,46 +1,35 @@
 import Foundation
 
 /// Folded search keys for the history, so a search compares bytes instead of folding every item's text again.
-///
-/// Search ignores case, accents and character width, in every locale (see `SearchFold`): `acao` finds `ação`,
-/// `CAFE` finds `café`. Every item gets a key; a search only skips items whose key is still being built.
+/// Search ignores case, accents and character width in every locale (see `SearchFold`).
 struct SearchCache {
-    /// The folded text and source app of one item.
     struct Key: Sendable {
         let text: [UInt8]
         let sourceApp: [UInt8]
     }
 
-    /// Keys by item id. Read-only outside this type.
     private(set) var keys: [UUID: Key] = [:]
 
-    /// Drops the key of an item that left the history.
     mutating func remove(_ id: UUID) {
         keys[id] = nil
     }
 
-    /// Builds the key for `item` unless it has one.
     mutating func prepare(_ item: CaptureItem) {
         _ = key(for: item)
     }
 
-    /// Adds keys built elsewhere, for items that have none yet.
     mutating func install(_ built: [UUID: Key], for items: [CaptureItem]) {
         for item in items where keys[item.id] == nil {
             if let key = built[item.id] { keys[item.id] = key }
         }
     }
 
-    /// True when every item has a key.
     func covers(_ items: [CaptureItem]) -> Bool {
         items.allSatisfy { keys[$0.id] != nil }
     }
 
-    /// The items whose text or source app contains `query`, keeping the order of `items`.
-    /// Keys that are missing are built here, but only until `budget` runs out. After that, items without a key are
-    /// not matched and are counted in `deferred`; they match once their keys exist. Items above
-    /// `Inbox.inlineKeyLimit` are never built here, so one huge text cannot overrun the budget; the background build
-    /// makes them searchable.
+    /// The items whose text or source app contains `query`, in the order of `items`. Missing keys are built here
+    /// until `budget` runs out; the rest count in `deferred`. Items above `Inbox.inlineKeyLimit` are left to the background build.
     mutating func search(
         _ query: String, in items: [CaptureItem], budget: Duration
     ) -> (items: [CaptureItem], deferred: Int) {
@@ -68,7 +57,7 @@ struct SearchCache {
         return (found, deferred)
     }
 
-    /// Builds a key without touching any cache. Safe to call off the main actor.
+    /// Builds a key without touching any cache; safe off the main actor.
     static func makeKey(text: String?, sourceApp: String?) -> Key {
         Key(text: SearchFold.fold(text ?? ""), sourceApp: SearchFold.fold(sourceApp ?? ""))
     }

@@ -18,14 +18,11 @@ public final class Inbox {
     /// Files of removed items, handed to the writer with the next save so they go after the JSON.
     @ObservationIgnored private var doomedFiles: [URL] = []
     @ObservationIgnored private var searchCache = SearchCache()
-    /// How long one search may spend building search keys that are still missing. Items without a key when it
-    /// runs out are left out of that search; the background build finishes them and `searchKeysVersion` changes.
+    /// How long one search may spend building missing search keys; items still without one are left out.
     @ObservationIgnored var searchBudget: Duration = .milliseconds(6)
-    /// Changes each time the background build installs keys. `search` reads it, so a view that shows search
-    /// results refreshes when more of the history becomes searchable.
+    /// Changes when the background build installs keys, so a search view refreshes.
     public private(set) var searchKeysVersion = 0
-    /// How many items the last `search` left out because their keys were not built in time. Zero once the
-    /// background build is done.
+    /// Items the last `search` left out because their keys were not built in time.
     @ObservationIgnored public private(set) var deferredSearchItems = 0
     @ObservationIgnored private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Inbox")
 
@@ -48,7 +45,7 @@ public final class Inbox {
         warmSearch(items)
     }
 
-    /// Blocks until the latest history is on disk. Call it when the app quits; saves otherwise run in the background.
+    /// Blocks until the latest history is on disk. Call it on quit.
     public func flush() {
         writer.flush()
     }
@@ -147,7 +144,7 @@ public final class Inbox {
     // MARK: Reading
 
     /// Items that match `query`, in display order. An empty query returns all items.
-    /// Matching ignores case, accents and character width, over the text and the source app name (`acao` finds `ação`).
+    /// Matching ignores case, accents and character width, over text and source app name.
     public func search(_ query: String) -> [CaptureItem] {
         _ = searchKeysVersion
         let items = self.items
@@ -158,8 +155,7 @@ public final class Inbox {
         return found.items
     }
 
-    /// True once every item's search key is built. Until then a search can leave out items whose keys are
-    /// missing (see `deferredSearchItems`); they appear once the background build installs them.
+    /// True once every item's search key is built (see `deferredSearchItems`).
     public var isSearchReady: Bool { searchCache.covers(items) }
 
     /// The item's file content, or nil when the item has no file or it cannot be read.
@@ -256,7 +252,6 @@ public final class Inbox {
     /// Texts up to this many UTF-8 bytes get their search key when added. Folding 16 KB of non-Latin text takes under 1 ms.
     nonisolated static let inlineKeyLimit = 16 * 1024
 
-    /// Builds the search keys of `items` on a background task, then installs them here.
     private func warmSearch(_ items: [CaptureItem]) {
         let snapshot = items.map { ($0.id, $0.text, $0.sourceApp) }
         guard !snapshot.isEmpty else { return }
@@ -276,7 +271,6 @@ public final class Inbox {
         }
     }
 
-    /// How many items have a search key. Tests check that items that left the history lost theirs.
     var searchKeyCount: Int { searchCache.keys.count }
 
     private func installSearchKeys(_ built: [UUID: SearchCache.Key]) {
