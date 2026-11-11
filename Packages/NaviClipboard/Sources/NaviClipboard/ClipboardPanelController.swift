@@ -18,6 +18,7 @@ final class ClipboardPanelController {
     private var panel: KeyPanel?
     private var previewPanel: NSPanel?
     private var previewTask: Task<Void, Never>?
+    private var observingHeight = false
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
     /// The panel's top-left corner. The panel grows and shrinks downward from here.
@@ -96,11 +97,16 @@ final class ClipboardPanelController {
 
     /// Resizes the panel each time the content height changes (typing filters the list).
     private func observeHeight() {
+        // One observer at a time: the panel is shown many times and each show asks for one.
+        guard !observingHeight else { return }
+        observingHeight = true
         withObservationTracking {
             _ = model.contentHeight
         } onChange: { [weak self] in
             Task { @MainActor in
-                guard let self, self.isVisible else { return }
+                guard let self else { return }
+                self.observingHeight = false
+                guard self.isVisible else { return }
                 self.applyHeight()
                 self.observeHeight()
             }

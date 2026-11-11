@@ -24,7 +24,7 @@ enum Metrics {
 public final class ClipboardModel {
     let inbox: Inbox
     public var query = "" {
-        didSet { selection = 0 }
+        didSet { select(0) }
     }
     var selection = 0 {
         didSet { onSelectionChange?() }
@@ -98,7 +98,7 @@ public final class ClipboardModel {
 
     func reset() {
         query = ""
-        selection = 0
+        select(0)
         opens += 1
         lastHoverLocation = NSEvent.mouseLocation
     }
@@ -106,8 +106,13 @@ public final class ClipboardModel {
     func move(by offset: Int) {
         let count = results.count
         guard count > 0 else { return }
+        select(min(max(selection + offset, 0), count - 1))
+    }
+
+    /// Selects a row from the keyboard or the app, so the list scrolls to it.
+    private func select(_ index: Int) {
         selectedByHover = false
-        selection = min(max(selection + offset, 0), count - 1)
+        selection = index
     }
 
     /// Selects a row on hover, but only when the mouse really moved.
@@ -124,18 +129,18 @@ public final class ClipboardModel {
     func togglePinSelected() {
         guard let item = selectedItem else { return }
         inbox.togglePin(item.id)
-        if let index = results.firstIndex(where: { $0.id == item.id }) { selection = index }
+        if let index = results.firstIndex(where: { $0.id == item.id }) { select(index) }
     }
 
     func deleteSelected() {
         guard let item = selectedItem else { return }
         inbox.remove(item.id)
-        selection = min(selection, max(results.count - 1, 0))
+        select(min(selection, max(results.count - 1, 0)))
     }
 
     func clear() {
         inbox.clearUnpinned()
-        selection = 0
+        select(0)
     }
 
     /// The full image of an item, for the preview card. Cached by item ID and content hash.
