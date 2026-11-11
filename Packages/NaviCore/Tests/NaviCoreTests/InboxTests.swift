@@ -195,6 +195,22 @@ final class InboxTests {
         #expect(try diskItems().isEmpty)
     }
 
+    @Test func filesOfAFailedSaveAreDeletedByTheNextSave() throws {
+        let inbox = make(directory: directory)
+        let item = try #require(inbox.add(fileData: Data([9]), fileExtension: "png", kind: .screenshot))
+        let url = try #require(inbox.fileURL(for: item))
+        inbox.flush()
+        // A read-only folder makes the atomic write of history.json fail.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        inbox.remove(item.id)
+        inbox.flush()
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+        inbox.add(text: "next", now: start)
+        inbox.flush()
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test func fileIsDeletedOnlyAfterJSONIsWritten() throws {
         let probe = Probe()
         let inbox = make(directory: directory, beforeDeleting: { probe.check() })

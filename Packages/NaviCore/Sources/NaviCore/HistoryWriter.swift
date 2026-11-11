@@ -51,8 +51,11 @@ final class HistoryWriter: Sendable {
         }) {
             let saved = persist(items)
             beforeDeleting?()
-            // If the write failed, the old JSON may still reference these files, so keep them.
-            guard saved else { continue }
+            // If the write failed, the old JSON may still reference these files: keep them for the next save.
+            guard saved else {
+                state.withLock { $0.doomed = doomed + $0.doomed }
+                continue
+            }
             let referenced = Set(items.compactMap(\.fileName))
             for url in doomed where !referenced.contains(url.lastPathComponent) {
                 try? FileManager.default.removeItem(at: url)
