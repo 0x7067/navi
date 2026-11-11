@@ -7,6 +7,7 @@ struct BenchOptions {
     var seed: UInt64 = 42
     var save = false
     var json = false
+    var corpus = Corpus.ascii
 
     init(arguments: [String]) throws {
         var remaining = arguments[...]
@@ -20,6 +21,12 @@ struct BenchOptions {
                 let text = try Self.value(flag, &remaining)
                 guard let number = UInt64(text) else { throw BenchError.usage("--seed needs a whole number, got \(text)") }
                 seed = number
+            case "--corpus":
+                let text = try Self.value(flag, &remaining)
+                guard let chosen = Corpus(rawValue: text) else {
+                    throw BenchError.usage("--corpus needs ascii, pt or mixed, got \(text)")
+                }
+                corpus = chosen
             case "--save": save = true
             case "--json": json = true
             default: throw BenchError.usage("unknown option \(flag)")
@@ -38,6 +45,16 @@ struct BenchOptions {
         }
         return number
     }
+}
+
+/// The language of the seeded text items.
+enum Corpus: String {
+    /// English words, all ASCII.
+    case ascii
+    /// Portuguese words; about 60% of text items contain accented words.
+    case pt
+    /// Cyrillic, Japanese, Arabic, Hindi and emoji-heavy text items, one script per item.
+    case mixed
 }
 
 /// Errors that stop the benchmark with a message.

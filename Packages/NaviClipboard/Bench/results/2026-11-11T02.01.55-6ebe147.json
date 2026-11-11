@@ -1,0 +1,250 @@
+{
+  "commit" : "6ebe147",
+  "corpus" : "ascii",
+  "iterations" : 20,
+  "machine" : {
+    "cpu" : "Apple M4 Pro",
+    "macOS" : "Version 27.2 (Build 26B123)"
+  },
+  "recorded" : "2026-11-11T02:01:55Z",
+  "seed" : 42,
+  "sizes" : [
+    {
+      "historyKB" : 379.978515625,
+      "items" : 200,
+      "scenarios" : [
+        {
+          "medianMs" : 0.6590415000000001,
+          "minMs" : 0.648042,
+          "name" : "load",
+          "p95Ms" : 0.674459
+        },
+        {
+          "medianMs" : 1.5343335,
+          "minMs" : 1.460625,
+          "name" : "add",
+          "p95Ms" : 1.621042
+        },
+        {
+          "matches" : 155,
+          "medianMs" : 0.05475,
+          "minMs" : 0.048958,
+          "name" : "search-common",
+          "p95Ms" : 0.05525
+        },
+        {
+          "matches" : 14,
+          "medianMs" : 0.175479,
+          "minMs" : 0.173875,
+          "name" : "search-rare",
+          "p95Ms" : 0.177333
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 0.18306250000000002,
+          "minMs" : 0.171083,
+          "name" : "search-none",
+          "p95Ms" : 0.187458
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 0.27508350000000004,
+          "minMs" : 0.259,
+          "name" : "search-accent-on-ascii",
+          "p95Ms" : 0.297959
+        },
+        {
+          "deferred" : 0,
+          "matches" : 155,
+          "medianMs" : 0.156667,
+          "minMs" : 0.14175,
+          "name" : "search-cold",
+          "p95Ms" : 0.1725
+        },
+        {
+          "medianMs" : 0.1192085,
+          "minMs" : 0.10725,
+          "name" : "search-warmup",
+          "p95Ms" : 0.1275
+        },
+        {
+          "matches" : 155,
+          "medianMs" : 0.051166500000000004,
+          "minMs" : 0.047583,
+          "name" : "results",
+          "p95Ms" : 0.0535
+        },
+        {
+          "medianMs" : 0.12549949999999999,
+          "minMs" : 0.113125,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.143334
+        },
+        {
+          "medianMs" : 1.481208,
+          "minMs" : 1.410125,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 1.507542
+        }
+      ]
+    },
+    {
+      "historyKB" : 1825.4990234375,
+      "items" : 1000,
+      "scenarios" : [
+        {
+          "medianMs" : 3.287021,
+          "minMs" : 3.211875,
+          "name" : "load",
+          "p95Ms" : 3.3195
+        },
+        {
+          "medianMs" : 6.597958,
+          "minMs" : 6.39475,
+          "name" : "add",
+          "p95Ms" : 7.104083
+        },
+        {
+          "matches" : 746,
+          "medianMs" : 0.276958,
+          "minMs" : 0.262917,
+          "name" : "search-common",
+          "p95Ms" : 0.292042
+        },
+        {
+          "matches" : 64,
+          "medianMs" : 0.755771,
+          "minMs" : 0.740791,
+          "name" : "search-rare",
+          "p95Ms" : 0.871791
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 0.7797495000000001,
+          "minMs" : 0.7635,
+          "name" : "search-none",
+          "p95Ms" : 0.827833
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 1.4024375,
+          "minMs" : 1.34425,
+          "name" : "search-accent-on-ascii",
+          "p95Ms" : 1.438166
+        },
+        {
+          "deferred" : 0,
+          "matches" : 746,
+          "medianMs" : 0.768729,
+          "minMs" : 0.723458,
+          "name" : "search-cold",
+          "p95Ms" : 0.965792
+        },
+        {
+          "medianMs" : 0.5456455,
+          "minMs" : 0.526333,
+          "name" : "search-warmup",
+          "p95Ms" : 0.565416
+        },
+        {
+          "matches" : 746,
+          "medianMs" : 0.2652295,
+          "minMs" : 0.261458,
+          "name" : "results",
+          "p95Ms" : 0.274916
+        },
+        {
+          "medianMs" : 0.12389549999999999,
+          "minMs" : 0.117958,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.13175
+        },
+        {
+          "medianMs" : 7.9550205,
+          "minMs" : 7.752291,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 8.065167
+        }
+      ]
+    },
+    {
+      "historyKB" : 8917.697265625,
+      "items" : 5000,
+      "scenarios" : [
+        {
+          "medianMs" : 16.1905005,
+          "minMs" : 15.862042,
+          "name" : "load",
+          "p95Ms" : 16.43025
+        },
+        {
+          "medianMs" : 31.205271,
+          "minMs" : 31.000708,
+          "name" : "add",
+          "p95Ms" : 32.239416
+        },
+        {
+          "matches" : 3704,
+          "medianMs" : 1.431646,
+          "minMs" : 1.399959,
+          "name" : "search-common",
+          "p95Ms" : 1.453375
+        },
+        {
+          "matches" : 280,
+          "medianMs" : 3.7265625,
+          "minMs" : 3.645333,
+          "name" : "search-rare",
+          "p95Ms" : 3.747792
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 3.8911875,
+          "minMs" : 3.853542,
+          "name" : "search-none",
+          "p95Ms" : 4.24025
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 6.288603999999999,
+          "minMs" : 6.140916,
+          "name" : "search-accent-on-ascii",
+          "p95Ms" : 6.319583
+        },
+        {
+          "deferred" : 0,
+          "matches" : 3704,
+          "medianMs" : 3.7914785,
+          "minMs" : 3.541875,
+          "name" : "search-cold",
+          "p95Ms" : 4.1265
+        },
+        {
+          "medianMs" : 4.749458499999999,
+          "minMs" : 4.590083,
+          "name" : "search-warmup",
+          "p95Ms" : 4.933917
+        },
+        {
+          "matches" : 3704,
+          "medianMs" : 1.4136665000000002,
+          "minMs" : 1.372125,
+          "name" : "results",
+          "p95Ms" : 1.496833
+        },
+        {
+          "medianMs" : 0.12456249999999999,
+          "minMs" : 0.116875,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.134208
+        },
+        {
+          "medianMs" : 1.5170210000000002,
+          "minMs" : 1.486833,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 1.6435
+        }
+      ]
+    }
+  ]
+}
