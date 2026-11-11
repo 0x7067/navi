@@ -82,6 +82,85 @@ xcrun xctrace record --template 'Time Profiler' --instrument 'os_signpost' --ins
 
 Open the `.trace` file in Instruments. In the `os_signpost` track, filter by subsystem `com.donovanhiland.navi`. The intervals above appear under category `History`.
 
+## Current numbers
+
+Goal: every main-thread scenario has a p95 under 16.6 ms (one 60 Hz frame) at 200, 1,000 and 5,000 items, on all three corpora. **Met:** every main-thread scenario is under the goal at every size and corpus. The worst main-thread p95 is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items).
+
+Background rows (`save-flush`, `search-warmup`) run off the main thread. They show total cost only and are not held to the goal.
+
+Recorded at commit `07feca8` on Apple M4 Pro, macOS 27.2, release build, seed 42, default iterations. Runs: `2026-11-11T02.30.10-07feca8.json` (ascii), `2026-11-11T02.30.37-07feca8.json` (pt) and `2026-11-11T02.32.12-07feca8.json` (mixed). All times in ms.
+
+### ascii corpus (`2026-11-11T02.30.10-07feca8.json`)
+
+| Scenario | 200 med | 200 p95 | 1,000 med | 1,000 p95 | 5,000 med | 5,000 p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| `load` | 0.653 | 0.688 | 1.199 | 1.790 | 5.637 | 6.062 |
+| `add` | 0.072 | 0.094 | 0.244 | 0.308 | 1.343 | 1.551 |
+| `save-flush` (background, not main thread) | 1.558 | 1.674 | 6.626 | 6.713 | 32.224 | 34.908 |
+| `add-large-mixed` | 0.959 | 1.308 | 1.030 | 2.431 | 2.107 | 2.266 |
+| `search-common` | 0.052 | 0.055 | 0.302 | 0.304 | 1.529 | 1.594 |
+| `search-rare` | 0.176 | 0.182 | 0.836 | 0.839 | 4.112 | 4.354 |
+| `search-none` | 0.183 | 0.184 | 0.878 | 0.880 | 4.408 | 5.269 |
+| `search-accent-on-ascii` | 0.297 | 0.300 | 1.439 | 1.442 | 6.852 | 7.317 |
+| `search-cold` | 0.123 | 0.125 | 0.659 | 0.687 | 4.272 | 4.706 |
+| `search-cold-huge` | 0.258 | 0.278 | 1.260 | 1.339 | 6.014 | 6.021 |
+| `search-warmup` (background, not main thread) | 0.115 | 0.124 | 0.621 | 0.682 | 5.072 | 5.362 |
+| `results` | 0.052 | 0.055 | 0.279 | 0.296 | 1.468 | 1.506 |
+| `thumbnail-open` | 0.121 | 0.131 | 0.133 | 0.145 | 0.124 | 0.137 |
+| `thumbnail-draw` | 1.489 | 1.648 | 8.384 | 8.703 | 1.508 | 1.539 |
+
+### pt corpus (`2026-11-11T02.30.37-07feca8.json`)
+
+| Scenario | 200 med | 200 p95 | 1,000 med | 1,000 p95 | 5,000 med | 5,000 p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| `load` | 0.769 | 0.808 | 1.269 | 1.358 | 5.512 | 7.107 |
+| `add` | 0.069 | 0.091 | 0.273 | 0.285 | 1.402 | 1.816 |
+| `save-flush` (background, not main thread) | 1.624 | 1.661 | 7.014 | 7.625 | 34.526 | 35.859 |
+| `add-large-mixed` | 0.929 | 1.150 | 1.115 | 1.244 | 2.132 | 2.346 |
+| `search-pt-common` | 0.041 | 0.042 | 0.198 | 0.427 | 0.955 | 1.021 |
+| `search-pt-rare` | 0.205 | 0.228 | 0.956 | 0.958 | 4.776 | 4.900 |
+| `search-pt-none` | 0.195 | 0.196 | 0.913 | 0.919 | 4.535 | 4.828 |
+| `search-pt-accent` | 0.194 | 0.201 | 0.946 | 0.948 | 4.662 | 4.752 |
+| `search-pt-accent2` | 0.039 | 0.039 | 0.209 | 0.211 | 1.113 | 1.181 |
+| `search-pt-digit` | 0.187 | 0.190 | 0.873 | 0.876 | 4.371 | 4.740 |
+| `search-pt-digit2` | 0.242 | 0.254 | 1.131 | 1.133 | 5.327 | 5.369 |
+| `search-pt-mixed` | 0.192 | 0.219 | 0.867 | 0.878 | 4.027 | 4.043 |
+| `search-pt-emoji` | 0.190 | 0.207 | 0.874 | 0.911 | 4.086 | 4.315 |
+| `search-pt-cold-rare` | 1.643 | 5.830 | 6.029 | 7.310 | 6.102 | 6.112 |
+| `search-pt-cold-accent` | 1.399 | 1.796 | 5.352 | 6.051 | 6.116 | 6.137 |
+| `search-pt-cold-digit` | 0.490 | 0.587 | 2.445 | 2.516 | 6.108 | 6.124 |
+| `search-pt-cold-mixed` | 0.512 | 0.606 | 2.506 | 2.608 | 6.109 | 6.114 |
+| `search-cold-huge` | 0.660 | 0.749 | 3.475 | 3.689 | 6.116 | 6.174 |
+| `search-warmup` (background, not main thread) | 0.288 | 0.309 | 1.638 | 1.899 | 10.971 | 11.373 |
+| `results` | 0.040 | 0.041 | 0.188 | 0.199 | 0.962 | 0.974 |
+| `thumbnail-open` | 0.124 | 0.135 | 0.127 | 0.139 | 0.126 | 0.133 |
+| `thumbnail-draw` | 1.534 | 1.684 | 1.526 | 1.553 | 8.468 | 9.481 |
+
+### mixed corpus (`2026-11-11T02.32.12-07feca8.json`)
+
+| Scenario | 200 med | 200 p95 | 1,000 med | 1,000 p95 | 5,000 med | 5,000 p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| `load` | 0.480 | 0.622 | 2.163 | 2.490 | 8.312 | 9.655 |
+| `add` | 0.069 | 0.081 | 0.265 | 0.294 | 1.550 | 1.632 |
+| `save-flush` (background, not main thread) | 2.476 | 2.672 | 12.495 | 13.282 | 60.077 | 64.889 |
+| `add-large-mixed` | 0.923 | 1.865 | 1.025 | 1.123 | 2.400 | 2.777 |
+| `search-mixed-cyrillic` | 0.375 | 0.402 | 1.789 | 1.804 | 9.318 | 9.368 |
+| `search-mixed-japanese` | 0.339 | 0.570 | 1.711 | 1.859 | 9.102 | 9.465 |
+| `search-mixed-arabic` | 0.351 | 0.383 | 1.812 | 1.824 | 9.274 | 9.422 |
+| `search-mixed-hindi` | 0.308 | 0.344 | 1.542 | 1.553 | 7.698 | 7.978 |
+| `search-mixed-emoji` | 0.328 | 0.347 | 1.568 | 1.586 | 8.237 | 8.598 |
+| `search-mixed-none` | 0.403 | 0.406 | 2.044 | 2.061 | 10.462 | 10.544 |
+| `search-mixed-cold-cyrillic` | 6.343 | 6.902 | 6.098 | 6.380 | 6.326 | 6.886 |
+| `search-mixed-cold-japanese` | 6.389 | 6.856 | 6.133 | 6.771 | 6.295 | 6.586 |
+| `search-mixed-cold-arabic` | 6.348 | 6.831 | 6.098 | 6.256 | 6.299 | 6.972 |
+| `search-mixed-cold-hindi` | 6.453 | 6.847 | 6.084 | 6.179 | 6.249 | 6.536 |
+| `search-mixed-cold-emoji` | 6.406 | 6.922 | 6.100 | 6.554 | 6.291 | 7.110 |
+| `search-cold-huge` | 6.461 | 6.769 | 6.136 | 6.285 | 6.229 | 6.561 |
+| `search-warmup` (background, not main thread) | 7.964 | 8.255 | 45.529 | 46.101 | 228.709 | 233.587 |
+| `results` | 0.337 | 0.347 | 1.793 | 1.820 | 9.378 | 9.465 |
+| `thumbnail-open` | 0.129 | 0.149 | 0.125 | 0.135 | 0.122 | 0.130 |
+| `thumbnail-draw` | 8.557 | 9.351 | 1.532 | 1.560 | 1.512 | 1.522 |
+
 ## Baseline
 
 Recorded on:
@@ -191,7 +270,7 @@ What the new search no longer matches that the old one did, from a one-off check
 | `search-cold` | A fresh `Inbox` from disk, then the first search at once. Only main-actor work is timed; the background build runs beside it |
 | `search-warmup` | From the end of `Inbox.init` until the background build has installed every key |
 
-Median and p95 in ms at 5,000 items. Before is the original filter (ASCII baseline above, run 2). After is `2026-11-11T02.02.03-6ebe147.json` (default corpus, second run; the first, `02.01.55`, is within 4% on every median), `2026-11-11T02.02.14-6ebe147.json` (`--corpus pt`) and `2026-11-11T02.02.48-6ebe147.json` (`--corpus mixed`). The previous version of this change had `search-pt-rare` at about 47 ms, `search-pt-none` at 49, `search-pt-accent` at 25 and `search-pt-accent2` at 36 on a similar Portuguese history; those were review measurements, not saved.
+Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe147`; current numbers are under Current numbers. Before is the original filter (ASCII baseline above, run 2). After is `2026-11-11T02.02.03-6ebe147.json` (default corpus, second run), `2026-11-11T02.02.14-6ebe147.json` (`--corpus pt`) and `2026-11-11T02.02.48-6ebe147.json` (`--corpus mixed`). The previous version of this change had `search-pt-rare` at about 47 ms, `search-pt-none` at 49, `search-pt-accent` at 25 and `search-pt-accent2` at 36 on a similar Portuguese history; those were review measurements, not saved.
 
 | Scenario | Before median | Before p95 | After median | After p95 | Deferred |
 |---|---:|---:|---:|---:|---:|
@@ -223,8 +302,8 @@ Median and p95 in ms at 5,000 items. Before is the original filter (ASCII baseli
 | search-mixed-cold-emoji | | | 6.232 | 6.481 | 4924 |
 | search-warmup, mixed (background) | | | 223.717 | 225.496 | |
 
-Every search scenario, cold included, is under 16.6 ms at p95 at 200, 1,000 and 5,000 items on all three corpora; the worst is 10 ms (`results` on the mixed corpus, a warm `memmem` over 22 MB of keys). The cold searches stay near the 6 ms budget whatever the script. The warm-up rows run on a background thread, not the main actor. `load`, `add` and the thumbnail scenarios do not touch this code and are within noise of the baseline.
+Every search scenario, cold included, is under 16.6 ms at p95 at 200, 1,000 and 5,000 items on all three corpora; the worst is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items, a warm `memmem` over 22 MB of keys) on `07feca8`, see Current numbers. The cold searches stay near the 6 ms budget whatever the script. The warm-up rows run on a background thread, not the main actor. `load`, `add` and the thumbnail scenarios do not touch this code and are within noise of the baseline.
 
 ### Bench isolation for `load` and the cold searches
 
-Each timed `load` and each cold search used to start while the previous run's `Inbox` was still building search keys in the background and was freed inside the timer. On the mixed corpus that made `load` read 23.5 ms median (41 ms p95) at 5,000 items, and `search-mixed-cold-arabic` spike to 18 ms p95 at 200 items. The decode itself is about 9 ms there (read 1.4 ms, decode 8 to 11 ms, sort 0.4 ms), already split into byte-balanced pieces over the core count. The bench now waits for the previous inbox's build to finish and frees it before each run, outside the timer. Mixed `load` is 9.4 ms median and 11.4 ms worst p95 over all sizes; every cold search is 7 ms or less at p95 at every size and corpus.
+Each timed `load` and each cold search used to start while the previous run's `Inbox` was still building search keys in the background and was freed inside the timer. On the mixed corpus that made `load` read 23.5 ms median (41 ms p95) at 5,000 items, and `search-mixed-cold-arabic` spike to 18 ms p95 at 200 items. The decode itself is about 9 ms there (read 1.4 ms, decode 8 to 11 ms, sort 0.4 ms), already split into byte-balanced pieces over the core count. The bench now waits for the previous inbox's build to finish and frees it before each run, outside the timer. Mixed `load` is 8.3 ms median and 9.7 ms worst p95 over all sizes on `07feca8`; every cold search is 7 ms or less at p95 at every size and corpus.

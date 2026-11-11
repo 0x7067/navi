@@ -1,0 +1,487 @@
+{
+  "commit" : "07feca8",
+  "corpus" : "pt",
+  "iterations" : 20,
+  "machine" : {
+    "cpu" : "Apple M4 Pro",
+    "macOS" : "Version 27.2 (Build 26B123)"
+  },
+  "recorded" : "2026-11-11T02:30:37Z",
+  "seed" : 42,
+  "sizes" : [
+    {
+      "historyKB" : 392.609375,
+      "items" : 200,
+      "scenarios" : [
+        {
+          "medianMs" : 0.768771,
+          "minMs" : 0.723792,
+          "name" : "load",
+          "p95Ms" : 0.807542
+        },
+        {
+          "medianMs" : 0.06877050000000001,
+          "minMs" : 0.063375,
+          "name" : "add",
+          "p95Ms" : 0.091209
+        },
+        {
+          "medianMs" : 1.6238755,
+          "minMs" : 1.529917,
+          "name" : "save-flush",
+          "p95Ms" : 1.660584
+        },
+        {
+          "medianMs" : 0.9289165,
+          "minMs" : 0.894,
+          "name" : "add-large-mixed",
+          "p95Ms" : 1.150208
+        },
+        {
+          "matches" : 163,
+          "medianMs" : 0.041458,
+          "minMs" : 0.04125,
+          "name" : "search-pt-common",
+          "p95Ms" : 0.041875
+        },
+        {
+          "matches" : 8,
+          "medianMs" : 0.20547949999999998,
+          "minMs" : 0.20525,
+          "name" : "search-pt-rare",
+          "p95Ms" : 0.228083
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 0.195417,
+          "minMs" : 0.195291,
+          "name" : "search-pt-none",
+          "p95Ms" : 0.195709
+        },
+        {
+          "matches" : 96,
+          "medianMs" : 0.1939795,
+          "minMs" : 0.193125,
+          "name" : "search-pt-accent",
+          "p95Ms" : 0.200958
+        },
+        {
+          "matches" : 158,
+          "medianMs" : 0.039125,
+          "minMs" : 0.038875,
+          "name" : "search-pt-accent2",
+          "p95Ms" : 0.039333
+        },
+        {
+          "matches" : 41,
+          "medianMs" : 0.187292,
+          "minMs" : 0.186958,
+          "name" : "search-pt-digit",
+          "p95Ms" : 0.1895
+        },
+        {
+          "matches" : 41,
+          "medianMs" : 0.242292,
+          "minMs" : 0.242042,
+          "name" : "search-pt-digit2",
+          "p95Ms" : 0.253709
+        },
+        {
+          "matches" : 41,
+          "medianMs" : 0.19195800000000002,
+          "minMs" : 0.184166,
+          "name" : "search-pt-mixed",
+          "p95Ms" : 0.219208
+        },
+        {
+          "matches" : 41,
+          "medianMs" : 0.19014599999999998,
+          "minMs" : 0.186125,
+          "name" : "search-pt-emoji",
+          "p95Ms" : 0.206542
+        },
+        {
+          "deferred" : 0,
+          "matches" : 8,
+          "medianMs" : 1.6425420000000002,
+          "minMs" : 1.207667,
+          "name" : "search-pt-cold-rare",
+          "p95Ms" : 5.829959
+        },
+        {
+          "deferred" : 0,
+          "matches" : 96,
+          "medianMs" : 1.3993955,
+          "minMs" : 0.813,
+          "name" : "search-pt-cold-accent",
+          "p95Ms" : 1.795875
+        },
+        {
+          "deferred" : 0,
+          "matches" : 41,
+          "medianMs" : 0.4895625,
+          "minMs" : 0.465791,
+          "name" : "search-pt-cold-digit",
+          "p95Ms" : 0.587
+        },
+        {
+          "deferred" : 0,
+          "matches" : 41,
+          "medianMs" : 0.5115625,
+          "minMs" : 0.477667,
+          "name" : "search-pt-cold-mixed",
+          "p95Ms" : 0.6055
+        },
+        {
+          "deferred" : 1,
+          "matches" : 41,
+          "medianMs" : 0.6598539999999999,
+          "minMs" : 0.599167,
+          "name" : "search-cold-huge",
+          "p95Ms" : 0.748792
+        },
+        {
+          "medianMs" : 0.28818750000000004,
+          "minMs" : 0.260208,
+          "name" : "search-warmup",
+          "p95Ms" : 0.309458
+        },
+        {
+          "matches" : 163,
+          "medianMs" : 0.039833,
+          "minMs" : 0.035583,
+          "name" : "results",
+          "p95Ms" : 0.0405
+        },
+        {
+          "medianMs" : 0.1242085,
+          "minMs" : 0.109667,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.134666
+        },
+        {
+          "medianMs" : 1.5335415000000001,
+          "minMs" : 1.447583,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 1.683875
+        }
+      ]
+    },
+    {
+      "historyKB" : 1838.826171875,
+      "items" : 1000,
+      "scenarios" : [
+        {
+          "medianMs" : 1.269104,
+          "minMs" : 1.192917,
+          "name" : "load",
+          "p95Ms" : 1.358208
+        },
+        {
+          "medianMs" : 0.27341649999999995,
+          "minMs" : 0.258042,
+          "name" : "add",
+          "p95Ms" : 0.285084
+        },
+        {
+          "medianMs" : 7.013542,
+          "minMs" : 6.770958,
+          "name" : "save-flush",
+          "p95Ms" : 7.625375
+        },
+        {
+          "medianMs" : 1.1154579999999998,
+          "minMs" : 1.020125,
+          "name" : "add-large-mixed",
+          "p95Ms" : 1.243542
+        },
+        {
+          "matches" : 788,
+          "medianMs" : 0.197937,
+          "minMs" : 0.195291,
+          "name" : "search-pt-common",
+          "p95Ms" : 0.427
+        },
+        {
+          "matches" : 42,
+          "medianMs" : 0.9563539999999999,
+          "minMs" : 0.955792,
+          "name" : "search-pt-rare",
+          "p95Ms" : 0.958416
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 0.9133119999999999,
+          "minMs" : 0.912792,
+          "name" : "search-pt-none",
+          "p95Ms" : 0.919291
+        },
+        {
+          "matches" : 468,
+          "medianMs" : 0.9459375,
+          "minMs" : 0.944625,
+          "name" : "search-pt-accent",
+          "p95Ms" : 0.948375
+        },
+        {
+          "matches" : 765,
+          "medianMs" : 0.2090415,
+          "minMs" : 0.208333,
+          "name" : "search-pt-accent2",
+          "p95Ms" : 0.211333
+        },
+        {
+          "matches" : 191,
+          "medianMs" : 0.8733960000000001,
+          "minMs" : 0.872542,
+          "name" : "search-pt-digit",
+          "p95Ms" : 0.875916
+        },
+        {
+          "matches" : 191,
+          "medianMs" : 1.130938,
+          "minMs" : 1.13025,
+          "name" : "search-pt-digit2",
+          "p95Ms" : 1.133334
+        },
+        {
+          "matches" : 191,
+          "medianMs" : 0.8671665,
+          "minMs" : 0.856458,
+          "name" : "search-pt-mixed",
+          "p95Ms" : 0.878
+        },
+        {
+          "matches" : 191,
+          "medianMs" : 0.874209,
+          "minMs" : 0.868125,
+          "name" : "search-pt-emoji",
+          "p95Ms" : 0.911333
+        },
+        {
+          "deferred" : 263,
+          "matches" : 29,
+          "medianMs" : 6.028604,
+          "minMs" : 6.00925,
+          "name" : "search-pt-cold-rare",
+          "p95Ms" : 7.310458
+        },
+        {
+          "deferred" : 0,
+          "matches" : 468,
+          "medianMs" : 5.3522085,
+          "minMs" : 2.472916,
+          "name" : "search-pt-cold-accent",
+          "p95Ms" : 6.051
+        },
+        {
+          "deferred" : 0,
+          "matches" : 191,
+          "medianMs" : 2.444875,
+          "minMs" : 2.37875,
+          "name" : "search-pt-cold-digit",
+          "p95Ms" : 2.515833
+        },
+        {
+          "deferred" : 0,
+          "matches" : 191,
+          "medianMs" : 2.506396,
+          "minMs" : 2.393042,
+          "name" : "search-pt-cold-mixed",
+          "p95Ms" : 2.608209
+        },
+        {
+          "deferred" : 1,
+          "matches" : 191,
+          "medianMs" : 3.4746249999999996,
+          "minMs" : 3.241917,
+          "name" : "search-cold-huge",
+          "p95Ms" : 3.688667
+        },
+        {
+          "medianMs" : 1.6375415,
+          "minMs" : 1.500959,
+          "name" : "search-warmup",
+          "p95Ms" : 1.899042
+        },
+        {
+          "matches" : 788,
+          "medianMs" : 0.187729,
+          "minMs" : 0.175125,
+          "name" : "results",
+          "p95Ms" : 0.199042
+        },
+        {
+          "medianMs" : 0.1269795,
+          "minMs" : 0.120667,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.138625
+        },
+        {
+          "medianMs" : 1.5258745,
+          "minMs" : 1.507166,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 1.552875
+        }
+      ]
+    },
+    {
+      "historyKB" : 9187.36328125,
+      "items" : 5000,
+      "scenarios" : [
+        {
+          "medianMs" : 5.511792,
+          "minMs" : 5.08225,
+          "name" : "load",
+          "p95Ms" : 7.107417
+        },
+        {
+          "medianMs" : 1.4016875,
+          "minMs" : 1.31875,
+          "name" : "add",
+          "p95Ms" : 1.816167
+        },
+        {
+          "medianMs" : 34.525958,
+          "minMs" : 33.099208,
+          "name" : "save-flush",
+          "p95Ms" : 35.858959
+        },
+        {
+          "medianMs" : 2.132313,
+          "minMs" : 1.970583,
+          "name" : "add-large-mixed",
+          "p95Ms" : 2.346083
+        },
+        {
+          "matches" : 3975,
+          "medianMs" : 0.9554585,
+          "minMs" : 0.923042,
+          "name" : "search-pt-common",
+          "p95Ms" : 1.021458
+        },
+        {
+          "matches" : 226,
+          "medianMs" : 4.775771,
+          "minMs" : 4.647916,
+          "name" : "search-pt-rare",
+          "p95Ms" : 4.899542
+        },
+        {
+          "matches" : 0,
+          "medianMs" : 4.535458,
+          "minMs" : 4.239625,
+          "name" : "search-pt-none",
+          "p95Ms" : 4.828125
+        },
+        {
+          "matches" : 2333,
+          "medianMs" : 4.661811999999999,
+          "minMs" : 4.5025,
+          "name" : "search-pt-accent",
+          "p95Ms" : 4.75175
+        },
+        {
+          "matches" : 3819,
+          "medianMs" : 1.1133545,
+          "minMs" : 1.10175,
+          "name" : "search-pt-accent2",
+          "p95Ms" : 1.180917
+        },
+        {
+          "matches" : 996,
+          "medianMs" : 4.371,
+          "minMs" : 4.23675,
+          "name" : "search-pt-digit",
+          "p95Ms" : 4.740167
+        },
+        {
+          "matches" : 996,
+          "medianMs" : 5.326729,
+          "minMs" : 5.052542,
+          "name" : "search-pt-digit2",
+          "p95Ms" : 5.369
+        },
+        {
+          "matches" : 996,
+          "medianMs" : 4.0273965,
+          "minMs" : 3.764375,
+          "name" : "search-pt-mixed",
+          "p95Ms" : 4.042584
+        },
+        {
+          "matches" : 996,
+          "medianMs" : 4.085770500000001,
+          "minMs" : 4.033292,
+          "name" : "search-pt-emoji",
+          "p95Ms" : 4.315334
+        },
+        {
+          "deferred" : 2612,
+          "matches" : 113,
+          "medianMs" : 6.102292,
+          "minMs" : 6.091584,
+          "name" : "search-pt-cold-rare",
+          "p95Ms" : 6.111917
+        },
+        {
+          "deferred" : 2603,
+          "matches" : 1112,
+          "medianMs" : 6.116229499999999,
+          "minMs" : 6.110875,
+          "name" : "search-pt-cold-accent",
+          "p95Ms" : 6.136917
+        },
+        {
+          "deferred" : 2542,
+          "matches" : 481,
+          "medianMs" : 6.108271,
+          "minMs" : 6.097666,
+          "name" : "search-pt-cold-digit",
+          "p95Ms" : 6.123959
+        },
+        {
+          "deferred" : 2580,
+          "matches" : 475,
+          "medianMs" : 6.109125,
+          "minMs" : 6.101375,
+          "name" : "search-pt-cold-mixed",
+          "p95Ms" : 6.114334
+        },
+        {
+          "deferred" : 3293,
+          "matches" : 337,
+          "medianMs" : 6.1160625,
+          "minMs" : 6.110666,
+          "name" : "search-cold-huge",
+          "p95Ms" : 6.173958
+        },
+        {
+          "medianMs" : 10.970646,
+          "minMs" : 10.739125,
+          "name" : "search-warmup",
+          "p95Ms" : 11.372541
+        },
+        {
+          "matches" : 3975,
+          "medianMs" : 0.961958,
+          "minMs" : 0.949625,
+          "name" : "results",
+          "p95Ms" : 0.974125
+        },
+        {
+          "medianMs" : 0.125542,
+          "minMs" : 0.122459,
+          "name" : "thumbnail-open",
+          "p95Ms" : 0.133292
+        },
+        {
+          "medianMs" : 8.468146,
+          "minMs" : 8.095334,
+          "name" : "thumbnail-draw",
+          "p95Ms" : 9.480625
+        }
+      ]
+    }
+  ]
+}
