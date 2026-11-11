@@ -224,3 +224,7 @@ Median and p95 in ms at 5,000 items. Before is the original filter (ASCII baseli
 | search-warmup, mixed (background) | | | 223.717 | 225.496 | |
 
 Every search scenario, cold included, is under 16.6 ms at p95 at 200, 1,000 and 5,000 items on all three corpora; the worst is 10 ms (`results` on the mixed corpus, a warm `memmem` over 22 MB of keys). The cold searches stay near the 6 ms budget whatever the script. The warm-up rows run on a background thread, not the main actor. `load`, `add` and the thumbnail scenarios do not touch this code and are within noise of the baseline.
+
+### Bench isolation for `load` and the cold searches
+
+Each timed `load` and each cold search used to start while the previous run's `Inbox` was still building search keys in the background and was freed inside the timer. On the mixed corpus that made `load` read 23.5 ms median (41 ms p95) at 5,000 items, and `search-mixed-cold-arabic` spike to 18 ms p95 at 200 items. The decode itself is about 9 ms there (read 1.4 ms, decode 8 to 11 ms, sort 0.4 ms), already split into byte-balanced pieces over the core count. The bench now waits for the previous inbox's build to finish and frees it before each run, outside the timer. Mixed `load` is 9.4 ms median and 11.4 ms worst p95 over all sizes; every cold search is 7 ms or less at p95 at every size and corpus.

@@ -41,9 +41,15 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     let runs = options.iterations * max(1, 1000 / count)
     var scenarios: [ScenarioResult] = []
 
-    let load = sample(runs, prepare: { () }, run: { _ in
-        Inbox(directory: directory, limit: limit).items.count
+    // Each load starts on an idle machine: the previous inbox's background key build finishes and the inbox is
+    // freed outside the timer, so its work does not slow the load being timed.
+    var previous: Inbox?
+    let load = sample(runs, prepare: { settle(&previous) }, run: { _ in
+        let loaded = Inbox(directory: directory, limit: limit)
+        previous = loaded
+        return loaded.items.count
     })
+    settle(&previous)
     scenarios.append(ScenarioResult(name: "load", milliseconds: load.milliseconds))
 
     let filler = String(repeating: "the report ", count: 150)
@@ -109,11 +115,18 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     // key build runs beside it, and its install waits for the main actor, which this loop never yields.
     for (name, query) in queries.cold {
         var deferred = 0
-        let cold = sample(runs, prepare: { Inbox(directory: directory, limit: limit) }, run: { fresh in
+        var last: Inbox?
+        let cold = sample(runs, prepare: { () -> Inbox in
+            settle(&last)
+            let fresh = Inbox(directory: directory, limit: limit)
+            last = fresh
+            return fresh
+        }, run: { fresh in
             let found = fresh.search(query).count
             deferred = fresh.deferredSearchItems
             return found
         })
+        settle(&last)
         scenarios.append(ScenarioResult(
             name: name, milliseconds: cold.milliseconds, matches: cold.count, deferred: deferred
         ))
@@ -144,6 +157,13 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     scenarios.append(ScenarioResult(name: "thumbnail-draw", milliseconds: drawn.milliseconds))
 
     return SizeResult(items: count, historyKB: Double(bytes) / 1024, scenarios: scenarios)
+}
+
+/// Waits until `inbox`'s background search build is done, then frees it.
+@MainActor
+private func settle(_ inbox: inout Inbox?) {
+    while let current = inbox, !current.isSearchReady { RunLoop.main.run(mode: .default, before: .now + 0.0005) }
+    inbox = nil
 }
 
 /// Untimed runs before the timed ones. Three, so caches and the allocator settle before the first sample.
