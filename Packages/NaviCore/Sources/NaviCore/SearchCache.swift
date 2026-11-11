@@ -11,11 +11,13 @@ struct SearchCache {
         let sourceApp: [UInt8]
     }
 
-    private var keys: [UUID: Key] = [:]
+    /// Keys by item id. Read-only outside this type; tests check that evicted items lose their keys.
+    private(set) var keys: [UUID: Key] = [:]
 
-    /// Drops keys of items that are no longer in the history.
+    /// Drops keys of items that are no longer in the history. Runs on every change to the list, so it returns
+    /// early only when there is nothing to drop.
     mutating func prune(keeping items: [CaptureItem]) {
-        guard keys.count > items.count || items.isEmpty else { return }
+        guard !keys.isEmpty else { return }
         let live = Set(items.map(\.id))
         keys = keys.filter { live.contains($0.key) }
     }
@@ -39,7 +41,9 @@ struct SearchCache {
 
     /// The items whose text or source app contains `query`, keeping the order of `items`.
     /// Keys that are missing are built here, but only until `budget` runs out. After that, items without a key are
-    /// not matched and are counted in `deferred`; they match once their keys exist.
+    /// not matched and are counted in `deferred`; they match once their keys exist. Items above
+    /// `Inbox.inlineKeyLimit` are never built here, so one huge text cannot overrun the budget; the background build
+    /// makes them searchable.
     mutating func search(
         _ query: String, in items: [CaptureItem], budget: Duration
     ) -> (items: [CaptureItem], deferred: Int) {
@@ -52,6 +56,9 @@ struct SearchCache {
             let key: Key
             if let cached = keys[item.id] {
                 key = cached
+            } else if Self.isHuge(item) {
+                deferred += 1
+                return false
             } else if outOfTime || ContinuousClock.now >= deadline {
                 outOfTime = true
                 deferred += 1
@@ -74,6 +81,10 @@ struct SearchCache {
         let key = Self.makeKey(text: item.text, sourceApp: item.sourceApp)
         keys[item.id] = key
         return key
+    }
+
+    private static func isHuge(_ item: CaptureItem) -> Bool {
+        (item.text?.utf8.count ?? 0) + (item.sourceApp?.utf8.count ?? 0) > Inbox.inlineKeyLimit
     }
 
     private static func contains(_ haystack: [UInt8], _ needle: [UInt8]) -> Bool {

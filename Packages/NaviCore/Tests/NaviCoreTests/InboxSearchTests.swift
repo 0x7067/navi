@@ -268,6 +268,46 @@ struct InboxSearchTests {
             }
         }
     }
+
+    @Test func coldSearchDoesNotFoldAHugeItem() async throws {
+        let inbox = Inbox(directory: directory)
+        let huge = String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000) + " агентство"
+        #expect(huge.utf8.count >= 2_000_000)
+        inbox.add(text: "pequeno", now: start)
+        inbox.add(text: huge, now: start + 1)
+        inbox.flush()
+        let reloaded = Inbox(directory: directory)
+        reloaded.searchBudget = .seconds(10)
+        var found: [CaptureItem] = []
+        let elapsed = ContinuousClock().measure { found = reloaded.search("агентство") }
+        // The budget is generous, so only the size rule can have skipped the huge item.
+        #expect(found.isEmpty)
+        #expect(reloaded.deferredSearchItems == 1)
+        #expect(!reloaded.isSearchReady)
+        #expect(elapsed < .milliseconds(30))
+        while !reloaded.isSearchReady { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(reloaded.search("агентство").count == 1)
+        #expect(reloaded.deferredSearchItems == 0)
+    }
+
+    @Test func pruneDropsKeysOfEvictedItemsEvenWhenCountsMatch() {
+        func item(_ text: String) -> CaptureItem {
+            CaptureItem(
+                id: UUID(), kind: .text, createdAt: start, lastUsedAt: start, copyCount: 1, pinned: false,
+                text: text, fileName: nil, sourceApp: nil, sourceBundleID: nil, contentHash: text
+            )
+        }
+        let evicted = item("alpha")
+        let kept = item("beta")
+        let added = item("gamma")
+        var cache = SearchCache()
+        cache.prepare(evicted)
+        cache.prepare(kept)
+        // Two keys and two items: the old count check skipped this prune and kept the evicted item's key.
+        cache.prune(keeping: [kept, added])
+        #expect(Set(cache.keys.keys) == [kept.id])
+    }
+
 }
 
 /// A small deterministic generator, so the fuzz test repeats exactly.

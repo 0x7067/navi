@@ -254,7 +254,7 @@ public final class Inbox {
     }
 
     /// Texts up to this many UTF-8 bytes get their search key when added. Folding 16 KB of non-Latin text takes under 1 ms.
-    static let inlineKeyLimit = 16 * 1024
+    nonisolated static let inlineKeyLimit = 16 * 1024
 
     /// Builds the search keys of `items` on a background task, then installs them here.
     private func warmSearch(_ items: [CaptureItem]) {

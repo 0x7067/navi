@@ -29,6 +29,11 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     )
     defer { try? FileManager.default.removeItem(at: directory) }
     try HistorySeeder.write(count: count, seed: options.seed, corpus: options.corpus, to: directory)
+    let hugeDirectory = FileManager.default.temporaryDirectory.appending(
+        path: "history-bench-huge-\(count)-\(UUID().uuidString)", directoryHint: .isDirectory
+    )
+    defer { try? FileManager.default.removeItem(at: hugeDirectory) }
+    try seedHugeHistory(count, options: options, in: hugeDirectory)
     let bytes = try fileSize(directory.appending(path: "history.json"))
     // Above `count`, so `add` never evicts a seeded item.
     let limit = count + 100
@@ -131,6 +136,23 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
             name: name, milliseconds: cold.milliseconds, matches: cold.count, deferred: deferred
         ))
     }
+    // The first search of an inbox that also holds a 2 MB text with no key yet. That text must be deferred, not folded.
+    var hugeDeferred = 0
+    var hugeLast: Inbox?
+    let hugeCold = sample(runs, prepare: { () -> Inbox in
+        settle(&hugeLast)
+        let fresh = Inbox(directory: hugeDirectory, limit: limit)
+        hugeLast = fresh
+        return fresh
+    }, run: { fresh in
+        let found = fresh.search("привет").count
+        hugeDeferred = fresh.deferredSearchItems
+        return found
+    })
+    settle(&hugeLast)
+    scenarios.append(ScenarioResult(
+        name: "search-cold-huge", milliseconds: hugeCold.milliseconds, matches: hugeCold.count, deferred: hugeDeferred
+    ))
     // Time from the end of `Inbox.init` until the background build has installed every key.
     let warmup = sample(runs, prepare: { Inbox(directory: directory, limit: limit) }, run: { fresh in
         while !fresh.isSearchReady { RunLoop.main.run(mode: .default, before: .now + 0.0005) }
@@ -157,6 +179,15 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     scenarios.append(ScenarioResult(name: "thumbnail-draw", milliseconds: drawn.milliseconds))
 
     return SizeResult(items: count, historyKB: Double(bytes) / 1024, scenarios: scenarios)
+}
+
+/// Seeds `count` items in `directory`, then adds one 2 MB mixed-script text. `Inbox` leaves it without a search key on disk.
+@MainActor
+private func seedHugeHistory(_ count: Int, options: BenchOptions, in directory: URL) throws {
+    try HistorySeeder.write(count: count, seed: options.seed, corpus: options.corpus, to: directory)
+    let inbox = Inbox(directory: directory, limit: count + 100)
+    inbox.add(text: "bench huge " + String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000))
+    inbox.flush()
 }
 
 /// Waits until `inbox`'s background search build is done, then frees it.
