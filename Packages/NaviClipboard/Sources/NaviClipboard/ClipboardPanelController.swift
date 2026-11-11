@@ -45,16 +45,19 @@ final class ClipboardPanelController {
         model.maxListHeight = max(screenFrame.height - Metrics.headerHeight - Metrics.footerHeight - 40, 200)
         model.onSelectionChange = { [weak self] in self?.schedulePreview() }
 
-        let host = NSHostingView(rootView: ClipboardListView(
-            model: model,
-            onChoose: { [weak self] item in self?.choose(item) },
-            onQuit: { NSApp.terminate(nil) }
-        ))
-        let container = Self.menuBackground(cornerRadius: 10)
-        host.frame = container.bounds
-        host.autoresizingMask = [.width, .height]
-        container.addSubview(host)
-        panel.contentView = container
+        // The list view is built once and kept: building it is most of the cost of an open.
+        if !(panel.contentView is NSVisualEffectView) {
+            let host = NSHostingView(rootView: ClipboardListView(
+                model: model,
+                onChoose: { [weak self] item in self?.choose(item) },
+                onQuit: { NSApp.terminate(nil) }
+            ))
+            let container = Self.menuBackground(cornerRadius: 10)
+            host.frame = container.bounds
+            host.autoresizingMask = [.width, .height]
+            container.addSubview(host)
+            panel.contentView = container
+        }
 
         applyHeight()
         observeHeight()
@@ -133,8 +136,7 @@ final class ClipboardPanelController {
         container.addSubview(host)
         preview.contentView = container
 
-        // Row frames use a top-left origin inside the panel.
-        let rowMidY = model.rowFrames[item.id].map { panel.frame.maxY - $0.midY } ?? panel.frame.maxY - 60
+        let rowMidY = panel.frame.maxY - (model.selectedRowMidY ?? 60)
         var x = panel.frame.minX - size.width - 8
         if x < screenFrame.minX { x = panel.frame.maxX + 8 }
         var y = rowMidY - size.height / 2

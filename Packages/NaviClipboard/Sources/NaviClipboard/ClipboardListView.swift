@@ -20,6 +20,7 @@ struct ClipboardListView: View {
         .frame(width: Metrics.width, height: model.contentHeight, alignment: .top)
         .font(.system(size: 13))
         .onAppear { searchFocused = true }
+        .onChange(of: model.opens) { searchFocused = true }
     }
 
     private var header: some View {
@@ -59,15 +60,16 @@ struct ClipboardListView: View {
                             .contentShape(Rectangle())
                             .onHover { inside in if inside { model.hover(index) } }
                             .onTapGesture { onChoose(item) }
-                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-                                model.rowFrames[item.id] = frame
-                            }
                         }
                     }
                     .padding(Metrics.listPadding)
+                    .id(SelectionFollower.listID)
                 }
                 .scrollIndicators(.never)
-                .background(SelectionFollower(model: model, ids: results.map(\.id), proxy: proxy))
+                .onScrollGeometryChange(for: CGRect.self) { $0.visibleRect } action: { _, visible in
+                    model.visibleRect = visible
+                }
+                .background(SelectionFollower(model: model, results: results, proxy: proxy))
             }
         }
     }
@@ -83,28 +85,55 @@ struct ClipboardListView: View {
     }
 }
 
-/// Scrolls to the selected row when the keyboard moved it. It reads the selection here, so a selection
-/// change redraws this view and the rows, not the whole list.
+/// Scrolls the list: to the selected row when the keyboard moved it off screen, and to the top on each open.
+/// It reads the selection here, so a selection change redraws this view and the rows, not the whole list.
 private struct SelectionFollower: View {
     let model: ClipboardModel
-    let ids: [UUID]
+    let results: [CaptureItem]
     let proxy: ScrollViewProxy
+    /// The padded list. Scrolling to its top or bottom keeps the padding that scrolling to a row would cut off.
+    static let listID = "list"
 
     var body: some View {
-        Color.clear.onChange(of: model.selection) { _, selection in
-            if !model.selectedByHover, ids.indices.contains(selection) { proxy.scrollTo(ids[selection]) }
-        }
+        Color.clear
+            .onChange(of: model.selection) { _, selection in
+                // `scrollTo` is the costly part of a selection step, so skip it for a row that is in view.
+                guard !model.selectedByHover, let anchor = model.scrollAnchor(for: selection, in: results) else { return }
+                if selection == 0 || selection == results.count - 1 {
+                    proxy.scrollTo(Self.listID, anchor: anchor)
+                } else {
+                    proxy.scrollTo(results[selection].id, anchor: anchor)
+                }
+            }
+            .onChange(of: model.opens) { proxy.scrollTo(Self.listID, anchor: .top) }
     }
 }
 
+/// Reads the selection, so every visible row re-runs this small body on a selection change.
 private struct ClipboardRow: View {
     let model: ClipboardModel
     let item: CaptureItem
     let index: Int
-    @State private var loaded: NSImage?
 
     var body: some View {
-        let isSelected = model.selection == index
+        ClipboardRowContent(model: model, item: item, index: index, isSelected: model.selection == index)
+            .equatable()
+    }
+}
+
+/// The row itself. Equatable, so only the rows whose selected state changed are drawn again.
+private struct ClipboardRowContent: View, @MainActor Equatable {
+    let model: ClipboardModel
+    let item: CaptureItem
+    let index: Int
+    let isSelected: Bool
+    @State private var loaded: NSImage?
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.item == rhs.item && lhs.index == rhs.index && lhs.isSelected == rhs.isSelected
+    }
+
+    var body: some View {
         HStack(spacing: 6) {
             if item.pinned {
                 Image(systemName: "pin.fill")

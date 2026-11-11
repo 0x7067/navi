@@ -1,6 +1,7 @@
 import AppKit
 import NaviCore
 import Observation
+import SwiftUI
 
 /// Sizes for the history panel. Row heights are fixed so the panel can size itself to fit.
 enum Metrics {
@@ -32,8 +33,10 @@ public final class ClipboardModel {
     var maxListHeight: CGFloat = 600
 
     @ObservationIgnored var onSelectionChange: (() -> Void)?
-    /// Row frames in panel coordinates (top-left origin). Used to place the preview next to its row.
-    @ObservationIgnored var rowFrames: [UUID: CGRect] = [:]
+    /// The part of the list content that is in view, in content coordinates.
+    @ObservationIgnored var visibleRect = CGRect.zero
+    /// Goes up on each open. The panel keeps one view, which scrolls to the top and focuses the search field on a change.
+    private(set) var opens = 0
     /// True when the mouse set the selection. The list scrolls to the selection only for the keyboard.
     @ObservationIgnored var selectedByHover = false
     /// Mouse position at the last hover. Rows that move under a still mouse must not steal the selection.
@@ -72,10 +75,31 @@ public final class ClipboardModel {
         Metrics.headerHeight + listHeight(for: results) + Metrics.footerHeight
     }
 
+    /// Top and bottom of the row at `index`, in list content coordinates. Row heights are fixed.
+    private func rowSpan(at index: Int, in results: [CaptureItem]) -> ClosedRange<CGFloat>? {
+        guard results.indices.contains(index) else { return nil }
+        let top = results[..<index].reduce(Metrics.listPadding) { $0 + Metrics.rowHeight(for: $1) }
+        return top...(top + Metrics.rowHeight(for: results[index]))
+    }
+
+    /// Where to scroll so the row at `index` is in view, or nil when it already is.
+    func scrollAnchor(for index: Int, in results: [CaptureItem]) -> UnitPoint? {
+        guard let span = rowSpan(at: index, in: results) else { return nil }
+        if span.lowerBound < visibleRect.minY { return .top }
+        if span.upperBound > visibleRect.maxY { return .bottom }
+        return nil
+    }
+
+    /// The middle of the selected row, measured down from the top of the panel. Places the preview card.
+    var selectedRowMidY: CGFloat? {
+        guard let span = rowSpan(at: selection, in: results) else { return nil }
+        return Metrics.headerHeight + (span.lowerBound + span.upperBound) / 2 - visibleRect.minY
+    }
+
     func reset() {
         query = ""
         selection = 0
-        rowFrames = [:]
+        opens += 1
         lastHoverLocation = NSEvent.mouseLocation
     }
 
