@@ -154,11 +154,12 @@ enum SearchFold {
 
         mutating func reserve(_ extra: Int) {
             guard count + extra > capacity else { return }
-            let bigger = UnsafeMutablePointer<UInt8>.allocate(capacity: max(capacity * 2, count + extra))
+            let grown = max(capacity * 2, count + extra)
+            let bigger = UnsafeMutablePointer<UInt8>.allocate(capacity: grown)
             bigger.update(from: storage, count: count)
             storage.deallocate()
             storage = bigger
-            capacity = max(capacity * 2, count + extra)
+            capacity = grown
         }
 
         /// Appends a row of the Latin table: the length, then the bytes.
@@ -176,11 +177,7 @@ enum SearchFold {
         }
 
         mutating func append(contentsOf bytes: [UInt8]) {
-            reserve(bytes.count)
-            for byte in bytes {
-                storage[count] = byte
-                count += 1
-            }
+            bytes.withUnsafeBufferPointer { append(contentsOf: $0) }
         }
 
         mutating func append(contentsOf bytes: UnsafeBufferPointer<UInt8>) {

@@ -93,7 +93,6 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     scenarios.append(ScenarioResult(name: "save-flush", milliseconds: saveFlush.milliseconds))
 
     // A pasted 2 MB text in other scripts. Its search key is built in the background, not inside `add`.
-    let large = String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000)
     var addedLarge: UUID?
     var largeCounter = 0
     let addLarge = sample(runs, prepare: {
@@ -104,7 +103,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
         }
     }, run: { _ in
         largeCounter += 1
-        addedLarge = inbox.add(text: "bench large \(largeCounter) " + large)?.id
+        addedLarge = inbox.add(text: "bench large \(largeCounter) " + hugeText)?.id
         return 1
     })
     if let id = addedLarge { inbox.remove(id) }
@@ -118,7 +117,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     }
     // A fresh inbox has no search keys yet. Only the main-actor work of the first search is timed; the background
     // key build runs beside it, and its install waits for the main actor, which this loop never yields.
-    for (name, query) in queries.cold {
+    func coldSearch(_ name: String, _ query: String, in directory: URL) -> ScenarioResult {
         var deferred = 0
         var last: Inbox?
         let cold = sample(runs, prepare: { () -> Inbox in
@@ -132,27 +131,11 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
             return found
         })
         settle(&last)
-        scenarios.append(ScenarioResult(
-            name: name, milliseconds: cold.milliseconds, matches: cold.count, deferred: deferred
-        ))
+        return ScenarioResult(name: name, milliseconds: cold.milliseconds, matches: cold.count, deferred: deferred)
     }
+    for (name, query) in queries.cold { scenarios.append(coldSearch(name, query, in: directory)) }
     // The first search of an inbox that also holds a 2 MB text with no key yet. That text must be deferred, not folded.
-    var hugeDeferred = 0
-    var hugeLast: Inbox?
-    let hugeCold = sample(runs, prepare: { () -> Inbox in
-        settle(&hugeLast)
-        let fresh = Inbox(directory: hugeDirectory, limit: limit)
-        hugeLast = fresh
-        return fresh
-    }, run: { fresh in
-        let found = fresh.search("привет").count
-        hugeDeferred = fresh.deferredSearchItems
-        return found
-    })
-    settle(&hugeLast)
-    scenarios.append(ScenarioResult(
-        name: "search-cold-huge", milliseconds: hugeCold.milliseconds, matches: hugeCold.count, deferred: hugeDeferred
-    ))
+    scenarios.append(coldSearch("search-cold-huge", "привет", in: hugeDirectory))
     // Time from the end of `Inbox.init` until the background build has installed every key.
     let warmup = sample(runs, prepare: { Inbox(directory: directory, limit: limit) }, run: { fresh in
         while !fresh.isSearchReady { RunLoop.main.run(mode: .default, before: .now + 0.0005) }
@@ -186,9 +169,12 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
 private func seedHugeHistory(_ count: Int, options: BenchOptions, in directory: URL) throws {
     try HistorySeeder.write(count: count, seed: options.seed, corpus: options.corpus, to: directory)
     let inbox = Inbox(directory: directory, limit: count + 100)
-    inbox.add(text: "bench huge " + String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000))
+    inbox.add(text: "bench huge " + hugeText)
     inbox.flush()
 }
+
+/// The 2 MB mixed-script text of `add-large-mixed` and `search-cold-huge`.
+private let hugeText = String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000)
 
 /// Waits until `inbox`'s background search build is done, then frees it.
 @MainActor
