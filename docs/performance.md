@@ -48,7 +48,7 @@ Each size gets a fresh temporary directory, deleted at the end. The bench writes
 | `search-mixed-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji`, `-accent`, `-none` | With `--corpus mixed`: a word in each script, `😀`, `acao` (finds `ação`), and `zzqxv` |
 | `search-mixed-cold-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji` | With `--corpus mixed`: the first search on a fresh inbox. The `deferred` column is how many items it left out |
 | `results` | `ClipboardModel.results` with the query `the` (`привет` with `--corpus mixed`): the search plus model overhead |
-| `thumbnail-open` | `ClipboardModel.image(for:)` on an image item. A new model per run, so the cache is always empty. `NSImage` reads the file lazily, so this covers reading the file and creating the image. The pixel decode is not included |
+| `thumbnail-open` | `ClipboardModel.image(for:)`, the full image the preview card shows, on an image item. A new model per run, so the cache is always empty. `NSImage` reads the file lazily, so this covers reading the file and creating the image. The pixel decode is not included |
 | `thumbnail-draw` | `ClipboardModel.image(for:)` on an uncached image item, then a draw into a 2× bitmap of the row frame (200×40 points, aspect fit, as `ClipboardListView` shows it). The draw forces the pixel decode that a row pays on first paint |
 
 The image item is the first image in the history, so it can differ between sizes.
@@ -63,10 +63,10 @@ The History code emits `os_signpost` intervals under subsystem `com.donovanhilan
 |---|---|---|
 | `PanelShow` | `ClipboardPanelController.show()` | From the call until the panel is ordered front |
 | `Search` | `ClipboardModel.results` | Filtering the inbox for the current query |
-| `RowImage` | `ClipboardModel.image(for:)` | A cache miss: reading and creating the row image |
+| `RowImage` | `ClipboardModel.thumbnail(for:)` | A cache miss: decoding the row thumbnail off the main actor |
 | `InboxSave` | `Inbox` (NaviCore) | Encoding and writing `history.json` |
 
-Limitation: `RowImage` ends when `image(for:)` returns, before the row draws. The pixel decode happens at draw time, so it is not inside the interval. The `thumbnail-draw` scenario measures that cost; a draw-time signpost is a follow-up.
+Rows show a thumbnail of at most 400 pixels, decoded in the background (`ClipboardModel.thumbnail(for:)`). `thumbnail-open` and `thumbnail-draw` time the full image, which only the preview card uses now.
 
 ### Recording a trace
 

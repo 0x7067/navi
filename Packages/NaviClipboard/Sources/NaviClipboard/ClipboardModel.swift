@@ -34,6 +34,8 @@ public final class ClipboardModel {
     @ObservationIgnored var onSelectionChange: (() -> Void)?
     /// Row frames in panel coordinates (top-left origin). Used to place the preview next to its row.
     @ObservationIgnored var rowFrames: [UUID: CGRect] = [:]
+    /// True when the mouse set the selection. The list scrolls to the selection only for the keyboard.
+    @ObservationIgnored var selectedByHover = false
     /// Mouse position at the last hover. Rows that move under a still mouse must not steal the selection.
     @ObservationIgnored var lastHoverLocation: CGPoint?
 
@@ -80,6 +82,7 @@ public final class ClipboardModel {
     func move(by offset: Int) {
         let count = results.count
         guard count > 0 else { return }
+        selectedByHover = false
         selection = min(max(selection + offset, 0), count - 1)
     }
 
@@ -88,7 +91,10 @@ public final class ClipboardModel {
         let location = NSEvent.mouseLocation
         guard location != lastHoverLocation else { return }
         lastHoverLocation = location
-        if selection != index { selection = index }
+        if selection != index {
+            selectedByHover = true
+            selection = index
+        }
     }
 
     func togglePinSelected() {
@@ -108,16 +114,51 @@ public final class ClipboardModel {
         selection = 0
     }
 
-    /// The row image for an item, decoded on a cache miss and cached by item ID and content hash.
+    /// The full image of an item, for the preview card. Cached by item ID and content hash.
     public func image(for item: CaptureItem) -> NSImage? {
         let key = "\(item.id.uuidString)-\(item.contentHash)" as NSString
         if let cached = images.object(forKey: key) { return cached }
-        let interval = HistorySignpost.signposter.beginInterval("RowImage")
-        defer { HistorySignpost.signposter.endInterval("RowImage", interval) }
-        let preview = inbox.previewURL(for: item.id)
-        let url = FileManager.default.fileExists(atPath: preview.path) ? preview : inbox.fileURL(for: item)
-        guard let url, let image = NSImage(contentsOf: url) else { return nil }
+        guard let url = imageURL(for: item), let image = NSImage(contentsOf: url) else { return nil }
         images.setObject(image, forKey: key)
         return image
+    }
+
+    /// The row thumbnail of an item, if it is already decoded.
+    func cachedThumbnail(for item: CaptureItem) -> NSImage? {
+        images.object(forKey: thumbnailKey(item))
+    }
+
+    /// The row thumbnail of an item: a small copy decoded off the main actor, so a row never waits for a full image.
+    func thumbnail(for item: CaptureItem) async -> NSImage? {
+        if let cached = cachedThumbnail(for: item) { return cached }
+        guard let url = imageURL(for: item) else { return nil }
+        let interval = HistorySignpost.signposter.beginInterval("RowImage")
+        let decoded = await Task.detached(priority: .userInitiated) { Self.downsample(url) }.value
+        HistorySignpost.signposter.endInterval("RowImage", interval)
+        guard let decoded else { return nil }
+        let image = NSImage(cgImage: decoded, size: .zero)
+        images.setObject(image, forKey: thumbnailKey(item))
+        return image
+    }
+
+    private func thumbnailKey(_ item: CaptureItem) -> NSString {
+        "\(item.id.uuidString)-\(item.contentHash)-thumbnail" as NSString
+    }
+
+    private func imageURL(for item: CaptureItem) -> URL? {
+        let preview = inbox.previewURL(for: item.id)
+        return FileManager.default.fileExists(atPath: preview.path) ? preview : inbox.fileURL(for: item)
+    }
+
+    /// Decodes `url` at no more than 400 pixels on its long side: the row shows it at 200 × 40 points.
+    private nonisolated static func downsample(_ url: URL) -> CGImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: 400,
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }

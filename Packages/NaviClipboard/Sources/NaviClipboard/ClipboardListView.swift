@@ -53,12 +53,7 @@ struct ClipboardListView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
-                            ClipboardRow(
-                                item: item,
-                                index: index,
-                                isSelected: index == model.selection,
-                                image: item.fileName == nil ? nil : model.image(for: item)
-                            )
+                            ClipboardRow(model: model, item: item, index: index)
                             .frame(height: Metrics.rowHeight(for: item))
                             .id(item.id)
                             .contentShape(Rectangle())
@@ -72,9 +67,7 @@ struct ClipboardListView: View {
                     .padding(Metrics.listPadding)
                 }
                 .scrollIndicators(.never)
-                .onChange(of: model.selection) { _, selection in
-                    if results.indices.contains(selection) { proxy.scrollTo(results[selection].id) }
-                }
+                .background(SelectionFollower(model: model, ids: results.map(\.id), proxy: proxy))
             }
         }
     }
@@ -90,13 +83,28 @@ struct ClipboardListView: View {
     }
 }
 
-private struct ClipboardRow: View {
-    let item: CaptureItem
-    let index: Int
-    let isSelected: Bool
-    let image: NSImage?
+/// Scrolls to the selected row when the keyboard moved it. It reads the selection here, so a selection
+/// change redraws this view and the rows, not the whole list.
+private struct SelectionFollower: View {
+    let model: ClipboardModel
+    let ids: [UUID]
+    let proxy: ScrollViewProxy
 
     var body: some View {
+        Color.clear.onChange(of: model.selection) { _, selection in
+            if !model.selectedByHover, ids.indices.contains(selection) { proxy.scrollTo(ids[selection]) }
+        }
+    }
+}
+
+private struct ClipboardRow: View {
+    let model: ClipboardModel
+    let item: CaptureItem
+    let index: Int
+    @State private var loaded: NSImage?
+
+    var body: some View {
+        let isSelected = model.selection == index
         HStack(spacing: 6) {
             if item.pinned {
                 Image(systemName: "pin.fill")
@@ -114,14 +122,20 @@ private struct ClipboardRow: View {
         .frame(maxHeight: .infinity)
         .foregroundStyle(isSelected ? Color.white : Color.primary)
         .background(isSelected ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+        .task(id: item.contentHash) {
+            if item.fileName != nil { loaded = await model.thumbnail(for: item) }
+        }
     }
 
     @ViewBuilder private var content: some View {
-        if let image {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: 200, maxHeight: Metrics.imageRowHeight - 10, alignment: .leading)
+        if item.fileName != nil {
+            // Empty until the thumbnail is decoded in the background.
+            if let image = model.cachedThumbnail(for: item) ?? loaded {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 200, maxHeight: Metrics.imageRowHeight - 10, alignment: .leading)
+            }
         } else {
             Text(Self.preview(item.text ?? ""))
                 .lineLimit(1)
