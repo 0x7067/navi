@@ -224,50 +224,6 @@ struct InboxSearchTests {
         #expect(reloaded.deferredSearchItems == 0)
     }
 
-    @Test func combiningMarkStacksDoNotGrowTheFoldCaches() {
-        let huge = "é" + String(repeating: "\u{301}", count: 5000)
-        #expect(SearchFold.fold(huge) == SearchFold.reference(huge))
-        for base in 0x80..<0x300 {
-            guard let scalar = Unicode.Scalar(base) else { continue }
-            for mark in 0x300..<0x370 {
-                let text = String(scalar) + String(Unicode.Scalar(mark)!) + "\u{302}"
-                #expect(SearchFold.fold(text) == SearchFold.reference(text))
-            }
-        }
-        #expect(SearchFold.cacheSizes.clusters <= SearchFold.maxCachedClusters)
-        #expect(SearchFold.cacheSizes.scalars <= SearchFold.maxCachedScalars)
-    }
-
-    @Test func foldEqualsTheSystemFoldOnRandomText() {
-        let pieces = [
-            "a", "B", "e", "É", "é", "e\u{301}", "E\u{301}", "ß", "ẞ", "SS", "i", "I", "İ", "ı", "K", "\u{212A}", "😀", "👍🏽",
-            "ǆ", "Ǆ", " ", "the", "café", "ﬁ", "fi", "Å", "A\u{30A}", "\u{212B}", "x", "ã", "õ", "ç", "ê", "a\u{303}",
-            "c\u{327}", "\u{303}", "1", "9", "ø", "Ø", "æ", "ł", "º", "ª", "¹", "€", "µ", "μ", "'", "\u{2019}", "…", "\u{200D}",
-            "\u{FE0F}", "\u{AD}", "ǘ", "ệ", "漢", "字", "한", "\u{1100}", "\u{1161}", "Привет", "Ω", "σ", "ς", "Ａ", "ｱ", "ｶ",
-            "\u{FF9E}", "カ", "\u{3099}", "①", "\u{64E}", "\u{93C}", "\u{2002}", "\u{200C}", "\u{F900}", "\u{1F3FD}",
-        ]
-        var generator = SeededGenerator(seed: 99)
-        for _ in 0..<20000 {
-            var text = (0..<Int.random(in: 1...14, using: &generator)).map { _ in pieces.randomElement(using: &generator)! }
-                .joined()
-            switch Int.random(in: 0..<4, using: &generator) {
-            case 0: text = text.precomposedStringWithCanonicalMapping
-            case 1: text = text.decomposedStringWithCanonicalMapping
-            default: break
-            }
-            #expect(SearchFold.fold(text) == SearchFold.reference(text), "text \(text.unicodeScalars.map(\.value))")
-        }
-    }
-
-    @Test func foldEqualsTheSystemFoldForEveryBMPScalar() {
-        for value in UInt32(0x20)..<0x10000 where !(0xD800...0xDFFF).contains(value) {
-            guard let scalar = Unicode.Scalar(value) else { continue }
-            for text in [String(scalar), "a" + String(scalar), "x" + String(scalar) + "\u{301}y"] {
-                #expect(SearchFold.fold(text) == SearchFold.reference(text), "scalar \(value)")
-            }
-        }
-    }
-
     @Test func coldSearchDoesNotFoldAHugeItem() async throws {
         let inbox = Inbox(directory: directory)
         let huge = String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000) + " агентство"

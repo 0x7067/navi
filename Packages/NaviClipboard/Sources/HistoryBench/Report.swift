@@ -8,7 +8,7 @@ struct ScenarioResult: Codable {
     let minMs: Double
     /// Items the scenario returned on its last run. Nil where that does not apply.
     let matches: Int?
-    /// Items the last run left out of a cold search because their keys were not built in time. Nil elsewhere.
+    /// Items a cold search skipped for lack of keys.
     let deferred: Int?
 
     init(name: String, milliseconds: [Double], matches: Int? = nil, deferred: Int? = nil) {

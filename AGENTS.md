@@ -225,7 +225,7 @@ Xnapper's backgrounds, and macshot's auto-redact.
 plus `files/`). Items sort by pinned, then by `lastUsedAt`. The newest 200
 unpinned items stay. Saves run on a background queue (`HistoryWriter`); call
 `Inbox.flush()` before the process exits (`applicationWillTerminate` does).
-Search ignores case, accents and character width (`SearchCache`, `SearchFold`).
+Search ignores case, accents and character width (`SearchCache`).
 New fields on `CaptureItem` must decode from old history
 files (use `decodeIfPresent` in `init(from:)`).
 

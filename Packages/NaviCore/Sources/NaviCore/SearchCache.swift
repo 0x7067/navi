@@ -1,7 +1,7 @@
 import Foundation
 
 /// Folded search keys for the history, so a search compares bytes instead of folding every item's text again.
-/// Search ignores case, accents and character width in every locale (see `SearchFold`).
+/// Search ignores case, accents and character width in every locale.
 struct SearchCache {
     struct Key: Sendable {
         let text: [UInt8]
@@ -33,7 +33,7 @@ struct SearchCache {
     mutating func search(
         _ query: String, in items: [CaptureItem], budget: Duration
     ) -> (items: [CaptureItem], deferred: Int) {
-        let needle = SearchFold.fold(query)
+        let needle = Self.fold(query)
         guard !needle.isEmpty else { return (items, 0) }
         let deadline = ContinuousClock.now + budget
         var outOfTime = false
@@ -59,7 +59,11 @@ struct SearchCache {
 
     /// Builds a key without touching any cache; safe off the main actor.
     static func makeKey(text: String?, sourceApp: String?) -> Key {
-        Key(text: SearchFold.fold(text ?? ""), sourceApp: SearchFold.fold(sourceApp ?? ""))
+        Key(text: Self.fold(text ?? ""), sourceApp: Self.fold(sourceApp ?? ""))
+    }
+
+    private static func fold(_ string: String) -> [UInt8] {
+        Array(string.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil).utf8)
     }
 
     private mutating func key(for item: CaptureItem) -> Key {

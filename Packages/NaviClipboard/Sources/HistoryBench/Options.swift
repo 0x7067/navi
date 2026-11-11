@@ -47,11 +47,8 @@ struct BenchOptions {
     }
 }
 
-/// The language of the seeded text items.
 enum Corpus: String {
-    /// English words, all ASCII.
     case ascii
-    /// Accented Latin, Cyrillic, Japanese, Arabic, Hindi and emoji-heavy text items, one script per item.
     case mixed
 }
 

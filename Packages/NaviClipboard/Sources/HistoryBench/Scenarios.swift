@@ -46,8 +46,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     let runs = options.iterations * max(1, 1000 / count)
     var scenarios: [ScenarioResult] = []
 
-    // Each load starts on an idle machine: the previous inbox's background key build finishes and the inbox is
-    // freed outside the timer, so its work does not slow the load being timed.
+    // Let the previous inbox's background work finish outside the timer.
     var previous: Inbox?
     let load = sample(runs, prepare: { settle(&previous) }, run: { _ in
         let loaded = Inbox(directory: directory, limit: limit)
@@ -63,7 +62,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     let add = sample(runs, prepare: {
         if let id = added {
             inbox.remove(id)
-            inbox.flush() // Outside the timer: each timed add starts with an idle writer.
+            inbox.flush()
             added = nil
         }
     }, run: { _ in
@@ -75,7 +74,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     inbox.flush()
     scenarios.append(ScenarioResult(name: "add", milliseconds: add.milliseconds))
 
-    // Total persistence cost: the add plus waiting for the background write to land.
+    // Add plus the wait for the background write.
     let saveFlush = sample(runs, prepare: {
         if let id = added {
             inbox.remove(id)
@@ -92,7 +91,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     inbox.flush()
     scenarios.append(ScenarioResult(name: "save-flush", milliseconds: saveFlush.milliseconds))
 
-    // A pasted 2 MB text in other scripts. Its search key is built in the background, not inside `add`.
+    // A pasted 2 MB text; its key is built in the background.
     var addedLarge: UUID?
     var largeCounter = 0
     let addLarge = sample(runs, prepare: {
@@ -115,8 +114,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
         let result = sample(runs, prepare: { () }, run: { _ in inbox.search(query).count })
         scenarios.append(ScenarioResult(name: name, milliseconds: result.milliseconds, matches: result.count))
     }
-    // A fresh inbox has no search keys yet. Only the main-actor work of the first search is timed; the background
-    // key build runs beside it, and its install waits for the main actor, which this loop never yields.
+    // Only the main-actor work of the first search is timed.
     func coldSearch(_ name: String, _ query: String, in directory: URL) -> ScenarioResult {
         var deferred = 0
         var last: Inbox?
@@ -134,9 +132,9 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
         return ScenarioResult(name: name, milliseconds: cold.milliseconds, matches: cold.count, deferred: deferred)
     }
     for (name, query) in queries.cold { scenarios.append(coldSearch(name, query, in: directory)) }
-    // The first search of an inbox that also holds a 2 MB text with no key yet. That text must be deferred, not folded.
+    // First search with a keyless 2 MB text, which must be deferred.
     scenarios.append(coldSearch("search-cold-huge", "привет", in: hugeDirectory))
-    // Time from the end of `Inbox.init` until the background build has installed every key.
+    // Time until the background build has installed every key.
     let warmup = sample(runs, prepare: { Inbox(directory: directory, limit: limit) }, run: { fresh in
         while !fresh.isSearchReady { RunLoop.main.run(mode: .default, before: .now + 0.0005) }
         return 1
@@ -164,7 +162,7 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     return SizeResult(items: count, historyKB: Double(bytes) / 1024, scenarios: scenarios)
 }
 
-/// Seeds `count` items in `directory`, then adds one 2 MB mixed-script text. `Inbox` leaves it without a search key on disk.
+/// Seeds `count` items in `directory`, then adds one 2 MB mixed-script text.
 @MainActor
 private func seedHugeHistory(_ count: Int, options: BenchOptions, in directory: URL) throws {
     try HistorySeeder.write(count: count, seed: options.seed, corpus: options.corpus, to: directory)
@@ -173,10 +171,10 @@ private func seedHugeHistory(_ count: Int, options: BenchOptions, in directory: 
     inbox.flush()
 }
 
-/// The 2 MB mixed-script text of `add-large-mixed` and `search-cold-huge`.
+/// The 2 MB mixed-script text.
 private let hugeText = String(repeating: "Привет мир 日本語のテキスト 😀 ", count: 40_000)
 
-/// Waits until `inbox`'s background search build is done, then frees it.
+/// Waits for `inbox`'s background search build, then frees it.
 @MainActor
 private func settle(_ inbox: inout Inbox?) {
     while let current = inbox, !current.isSearchReady { RunLoop.main.run(mode: .default, before: .now + 0.0005) }
@@ -234,11 +232,10 @@ private func fileSize(_ url: URL) throws -> Int {
     try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int ?? 0
 }
 
-/// The queries each corpus times, as (scenario name, query).
+/// The (scenario name, query) pairs each corpus times.
 private struct SearchQueries {
     let warm: [(String, String)]
     let cold: [(String, String)]
-    /// The query for the `results` scenario.
     let results: String
 
     init(_ corpus: Corpus) {

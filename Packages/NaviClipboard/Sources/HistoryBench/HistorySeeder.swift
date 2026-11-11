@@ -14,7 +14,6 @@ enum HistorySeeder {
         "panel", "markup", "overlay", "capture", "history", "search", "paste", "folder", "version", "summary",
     ]
     static let rareWord = "quartz"
-    /// Accented Latin words: ã õ ç é ê á í ó ú à.
     static let accentedVocabulary = [
         "ação", "informação", "reunião", "não", "São", "Paulo", "configuração", "título", "área", "você",
         "também", "até", "versão", "é", "às", "opção", "atenção", "câmera", "médico", "coração",
@@ -65,8 +64,7 @@ enum HistorySeeder {
         try JSONEncoder().encode(items).write(to: directory.appending(path: "history.json"))
     }
 
-    /// One word list per script for the `mixed` corpus. Arabic has vowel marks, Hindi has combining signs,
-    /// and the emoji include a skin tone, a flag and a family sequence.
+    /// One word list per script for the `mixed` corpus.
     static let mixedVocabularies: [[String]] = [
         accentedVocabulary,
         ["привет", "мир", "отчёт", "проект", "встреча", "бюджет", "клиент", "сервер", "резервная", "копия", "окно",
@@ -87,7 +85,6 @@ enum HistorySeeder {
         }
     }
 
-    /// Like `makeText`, in one script chosen per item.
     private static func makeMixedText(index: Int, _ random: inout LCG) -> String {
         let words = mixedVocabularies[random.below(mixedVocabularies.count)]
         let target = 20 + random.below(3981)
