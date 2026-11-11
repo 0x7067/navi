@@ -19,6 +19,8 @@ public final class ClipboardFeature {
 
     public func start() {
         watcher.start()
+        model.keepThumbnailsWarm()
+        Task { @MainActor [weak self] in self?.panel.prepare() }
     }
 
     public func showPanel() {

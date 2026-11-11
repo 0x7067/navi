@@ -142,22 +142,17 @@ private func benchmarkSize(_ count: Int, options: BenchOptions) throws -> SizeRe
     scenarios.append(ScenarioResult(name: "search-warmup", milliseconds: warmup.milliseconds))
 
     let model = ClipboardModel(inbox: inbox)
-    model.query = queries.results
-    let results = sample(runs, prepare: { () }, run: { _ in model.results.count })
+    // Clearing the query first makes each timed run a real search: the memo only answers a repeat of the last query.
+    let results = sample(runs, prepare: { () }, run: { _ in
+        model.query = ""
+        _ = model.results
+        model.query = queries.results
+        return model.results.count
+    })
     scenarios.append(ScenarioResult(name: "results", milliseconds: results.milliseconds, matches: results.count))
-
-    guard let picture = inbox.items.first(where: { $0.fileName != nil }) else { throw BenchError.noImages }
-    // A new model per run has an empty image cache, so every run is a cache miss.
-    let opened = sample(runs, prepare: { ClipboardModel(inbox: inbox) }, run: { model in
-        model.image(for: picture) == nil ? 0 : 1
-    })
-    scenarios.append(ScenarioResult(name: "thumbnail-open", milliseconds: opened.milliseconds))
-    // Drawing forces the pixel decode that a row pays on first paint, so this is the cost the list shows.
-    let drawn = sample(runs, prepare: { ClipboardModel(inbox: inbox) }, run: { model in
-        guard let image = model.image(for: picture) else { return 0 }
-        return drawThumbnail(image)
-    })
-    scenarios.append(ScenarioResult(name: "thumbnail-draw", milliseconds: drawn.milliseconds))
+    // Nothing changed since the last read, so every run is a memo hit.
+    let repeated = sample(runs, prepare: { () }, run: { _ in model.results.count })
+    scenarios.append(ScenarioResult(name: "results-repeat", milliseconds: repeated.milliseconds, matches: repeated.count))
 
     return SizeResult(items: count, historyKB: Double(bytes) / 1024, scenarios: scenarios)
 }
@@ -183,28 +178,6 @@ private func settle(_ inbox: inout Inbox?) {
 
 /// Untimed runs before the timed ones. Three, so caches and the allocator settle before the first sample.
 private let warmUpRuns = 3
-
-/// The row thumbnail frame in points, from `ClipboardListView` (`maxWidth: 200`, `imageRowHeight - 10`).
-private let rowThumbnailPoints = CGSize(width: 200, height: 40)
-
-/// Draws `image` aspect-fit into the row frame at 2x and returns 1. Drawing decodes the pixels.
-@MainActor
-private func drawThumbnail(_ image: NSImage) -> Int {
-    let canvas = CGSize(width: rowThumbnailPoints.width * 2, height: rowThumbnailPoints.height * 2)
-    guard let context = CGContext(
-        data: nil, width: Int(canvas.width), height: Int(canvas.height), bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-    ) else { return 0 }
-    let source = image.size
-    let scale = min(canvas.width / source.width, canvas.height / source.height)
-    let fitted = CGSize(width: source.width * scale, height: source.height * scale)
-    let origin = CGPoint(x: (canvas.width - fitted.width) / 2, y: (canvas.height - fitted.height) / 2)
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
-    image.draw(in: CGRect(origin: origin, size: fitted))
-    NSGraphicsContext.restoreGraphicsState()
-    return 1
-}
 
 /// Runs `run` `warmUpRuns` times untimed, then `iterations` timed times. `prepare` runs before each run, outside the timer.
 /// Returns the timed runs in milliseconds and the count from the last run.

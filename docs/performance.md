@@ -47,11 +47,8 @@ Each size gets a fresh temporary directory, deleted at the end. The bench writes
 | `search-cold-huge` | The first search (`привет`) on a fresh inbox that also holds a 2 MB text with no key yet. That text must be left out and counted as deferred, not folded |
 | `search-mixed-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji`, `-accent`, `-none` | With `--corpus mixed`: a word in each script, `😀`, `acao` (finds `ação`), and `zzqxv` |
 | `search-mixed-cold-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji` | With `--corpus mixed`: the first search on a fresh inbox. The `deferred` column is how many items it left out |
-| `results` | `ClipboardModel.results` with the query `the` (`привет` with `--corpus mixed`): the search plus model overhead |
-| `thumbnail-open` | `ClipboardModel.image(for:)`, the full image the preview card shows, on an image item. A new model per run, so the cache is always empty. `NSImage` reads the file lazily, so this covers reading the file and creating the image. The pixel decode is not included |
-| `thumbnail-draw` | `ClipboardModel.image(for:)` on an uncached image item, then a draw into a 2× bitmap of the row frame (200×40 points, aspect fit, as `ClipboardListView` shows it). The draw forces the pixel decode that a row pays on first paint |
-
-The image item is the first image in the history, so it can differ between sizes.
+| `results` | `ClipboardModel.results` after the query is cleared, then set to `the` (`привет` with `--corpus mixed`). Each run is a real search, plus model overhead |
+| `results-repeat` | `ClipboardModel.results` read again with nothing changed, so it is answered from the memo. No search runs |
 
 Each scenario reports the median, p95 and minimum in milliseconds. `matches` is the number of items the last run returned.
 
@@ -61,12 +58,12 @@ The History code emits `os_signpost` intervals under subsystem `com.donovanhilan
 
 | Interval | Where | Covers |
 |---|---|---|
-| `PanelShow` | `ClipboardPanelController.show()` | From the call until the panel is ordered front |
-| `Search` | `ClipboardModel.results` | Filtering the inbox for the current query |
+| `PanelShow` | `ClipboardPanelController.show()` | From the call until the panel is ordered front. The panel is built earlier, by `prepare()` at launch |
+| `Search` | `ClipboardModel.results` | Filtering the inbox, only when the query or the history changed |
 | `RowImage` | `ClipboardModel.thumbnail(for:)` | A cache miss: decoding the row thumbnail off the main actor |
 | `InboxSave` | `Inbox` (NaviCore) | Encoding and writing `history.json` |
 
-Rows show a thumbnail of at most 400 pixels, decoded in the background (`ClipboardModel.thumbnail(for:)`). `thumbnail-open` and `thumbnail-draw` time the full image, which only the preview card uses now.
+Rows show a thumbnail of at most 400 pixels, decoded in the background (`ClipboardModel.thumbnail(for:)`). The preview card decodes its image off the main actor, at card size (`ClipboardModel.previewImage(for:)`).
 
 ### Recording a trace
 
@@ -162,6 +159,10 @@ No scenario has a median under 0.1 ms, so none is below timer resolution.
 
 - **Saving** (`HistoryWriter`): `Inbox` hands each snapshot to a serial background queue. A newer snapshot replaces one that has not started writing. Files of removed items are deleted after the snapshot that drops them is written. `Inbox.flush()` waits for the queue; the app calls it on quit.
 - **Loading** (`CaptureItem.decodeHistory`): a `history.json` over 512 KB is cut at item boundaries and the pieces decode in parallel. If a piece fails, the whole file decodes on one thread. The format on disk is unchanged.
+- **Memoized results** (`ClipboardModel.results`): the last search is kept until the query, the items or the search keys change. A repeated read is a comparison, not a search.
+- **Warm thumbnails** (`ClipboardModel.keepThumbnailsWarm()`): the first 40 rows decode their thumbnails at launch and again whenever the history changes. A row and the prewarm share one decode of the same image.
+- **Card image** (`ClipboardModel.previewImage(for:)`): the preview card decodes at most 960 pixels on its long side, off the main actor. It waits 150 ms first, so holding an arrow key decodes nothing. The cache holds this card-size copy, not the full image.
+- **Panel at launch** (`ClipboardPanelController.prepare()`): the panel and its list view are built and sized at launch, so the first open does not build them.
 - **Search** (`SearchCache`): each item has a key, the bytes of its text and source app after `String.folding` with case, accents and width ignored (`acao` finds `ação`). A search folds the query the same way and looks for it with `memmem`.
   - A new item up to 16 KB gets its key when added; a bigger one in the background. After launch a background task builds the keys of the loaded items, 500 at a time.
   - Until the keys exist, a search builds missing ones up to 16 KB itself for at most `Inbox.searchBudget` (6 ms). Items still without a key are left out of that search and counted in `Inbox.deferredSearchItems`. Each installed batch changes `Inbox.searchKeysVersion`, so the list refreshes by itself as keys land.

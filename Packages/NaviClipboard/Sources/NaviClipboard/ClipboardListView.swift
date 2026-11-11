@@ -207,6 +207,7 @@ private struct FooterRow: View {
 struct ClipboardPreview: View {
     let item: CaptureItem
     let image: NSImage?
+    let appIcon: NSImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -214,11 +215,11 @@ struct ClipboardPreview: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: 480, maxHeight: 360, alignment: .leading)
+                    .frame(maxWidth: Metrics.previewMaxWidth, maxHeight: Metrics.previewMaxHeight, alignment: .leading)
             } else {
                 Text(String((item.text ?? "").prefix(3000)))
                     .lineLimit(24)
-                    .frame(maxWidth: 480, alignment: .leading)
+                    .frame(maxWidth: Metrics.previewMaxWidth, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
@@ -244,12 +245,5 @@ struct ClipboardPreview: View {
         .font(.system(size: 13))
         .padding(16)
         .fixedSize()
-    }
-
-    private var appIcon: NSImage? {
-        guard let bundleID = item.sourceBundleID,
-              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
-        else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
     }
 }

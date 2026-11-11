@@ -10,7 +10,11 @@ import os
 @MainActor
 @Observable
 public final class Inbox {
-    public private(set) var items: [CaptureItem] = []
+    public private(set) var items: [CaptureItem] = [] {
+        didSet { itemsVersion &+= 1 }
+    }
+    /// Goes up on every change to `items`. Not observed: read `items` to observe a change.
+    @ObservationIgnored public private(set) var itemsVersion = 0
     public let directory: URL
     public var limit: Int
 

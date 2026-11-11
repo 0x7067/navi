@@ -56,14 +56,12 @@ enum Corpus: String {
 enum BenchError: Error, CustomStringConvertible {
     case usage(String)
     case render
-    case noImages
     case seeding(expected: Int, found: Int)
 
     var description: String {
         switch self {
         case .usage(let message): message
         case .render: "could not render a test picture"
-        case .noImages: "the seeded history has no image items"
         case .seeding(let expected, let found): "seeded \(found) items, expected \(expected)"
         }
     }

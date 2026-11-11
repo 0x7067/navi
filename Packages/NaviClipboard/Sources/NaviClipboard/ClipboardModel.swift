@@ -12,6 +12,9 @@ enum Metrics {
     static let listPadding: CGFloat = 5
     static let footerRowHeight: CGFloat = 24
     static let footerHeight: CGFloat = 1 + footerRowHeight * 2 + listPadding * 2
+    /// The largest image the preview card shows, in points.
+    static let previewMaxWidth: CGFloat = 480
+    static let previewMaxHeight: CGFloat = 360
 
     static func rowHeight(for item: CaptureItem) -> CGFloat {
         item.fileName == nil ? textRowHeight : imageRowHeight
@@ -44,17 +47,33 @@ public final class ClipboardModel {
 
     /// Keyed by item ID and content hash, so an edited capture shows its new image.
     @ObservationIgnored private let images = NSCache<NSString, NSImage>()
+    /// Thumbnails being decoded now, by cache key, so a prewarm and a row never decode the same image twice.
+    @ObservationIgnored private var decoding: [NSString: Task<CGImage?, Never>] = [:]
+    /// Icons of the apps items were copied from, by bundle ID.
+    @ObservationIgnored private var appIcons: [String: NSImage] = [:]
+    /// The last search and what it was made from.
+    @ObservationIgnored private var lastSearch: (query: String, items: Int, keys: Int, results: [CaptureItem])?
 
     /// Creates the state for the history panel, reading from `inbox`.
     public init(inbox: Inbox) {
         self.inbox = inbox
     }
 
-    /// The items that match the query, in display order.
+    /// The items that match the query, in display order. The last search is reused until the query or the history changes.
     public var results: [CaptureItem] {
+        // Read the inputs every time, so a caller that observes `results` still tracks them.
+        let query = self.query
+        _ = inbox.items
+        // Read before the search, which reads the keys version too.
+        let items = inbox.itemsVersion, keys = inbox.searchKeysVersion
+        if let lastSearch, lastSearch.query == query, lastSearch.items == items, lastSearch.keys == keys {
+            return lastSearch.results
+        }
         let interval = HistorySignpost.signposter.beginInterval("Search")
-        defer { HistorySignpost.signposter.endInterval("Search", interval) }
-        return inbox.search(query)
+        let results = inbox.search(query)
+        HistorySignpost.signposter.endInterval("Search", interval)
+        lastSearch = (query, items, keys, results)
+        return results
     }
 
     var selectedItem: CaptureItem? { item(at: selection) }
@@ -143,51 +162,118 @@ public final class ClipboardModel {
         select(0)
     }
 
-    /// The full image of an item, for the preview card. Cached by item ID and content hash.
-    public func image(for item: CaptureItem) -> NSImage? {
-        let key = "\(item.id.uuidString)-\(item.contentHash)" as NSString
-        if let cached = images.object(forKey: key) { return cached }
-        guard let url = imageURL(for: item), let image = NSImage(contentsOf: url) else { return nil }
-        images.setObject(image, forKey: key)
-        return image
-    }
-
     /// The row thumbnail of an item, if it is already decoded.
     func cachedThumbnail(for item: CaptureItem) -> NSImage? {
         images.object(forKey: thumbnailKey(item))
     }
 
-    /// The row thumbnail of an item: a small copy decoded off the main actor, so a row never waits for a full image.
+    /// The row thumbnail of an item: a copy of at most 400 pixels, decoded off the main actor, so a row never waits for a full image.
     func thumbnail(for item: CaptureItem) async -> NSImage? {
         if let cached = cachedThumbnail(for: item) { return cached }
-        guard let url = imageURL(for: item) else { return nil }
+        let key = thumbnailKey(item)
+        let task: Task<CGImage?, Never>
+        if let existing = decoding[key] {
+            task = existing
+        } else {
+            guard let file = inbox.fileURL(for: item) else { return nil }
+            let preview = inbox.previewURL(for: item.id)
+            let maxPixelSize = 400
+            task = Task.detached(priority: .userInitiated) {
+                Self.downsample(preview, maxPixelSize: maxPixelSize) ?? Self.downsample(file, maxPixelSize: maxPixelSize)
+            }
+            decoding[key] = task
+        }
         let interval = HistorySignpost.signposter.beginInterval("RowImage")
-        let decoded = await Task.detached(priority: .userInitiated) { Self.downsample(url) }.value
+        let decoded = await task.value
         HistorySignpost.signposter.endInterval("RowImage", interval)
+        decoding[key] = nil
+        if let cached = cachedThumbnail(for: item) { return cached }
         guard let decoded else { return nil }
         let image = NSImage(cgImage: decoded, size: .zero)
-        images.setObject(image, forKey: thumbnailKey(item))
+        images.setObject(image, forKey: key)
         return image
+    }
+
+    /// How many rows from the top get their thumbnail ahead of time: more than one screen of rows.
+    static let warmRows = 40
+
+    /// Decodes the thumbnails of the first image rows now, and again each time the history changes,
+    /// so the panel opens with its images already there.
+    func keepThumbnailsWarm() {
+        let items = withObservationTracking { inbox.items } onChange: { [weak self] in
+            Task { @MainActor in self?.keepThumbnailsWarm() }
+        }
+        for item in items.prefix(Self.warmRows) where item.fileName != nil && cachedThumbnail(for: item) == nil {
+            Task { _ = await thumbnail(for: item) }
+        }
+    }
+
+    /// The image for the preview card: decoded off the main actor, no bigger than the card shows it on a 2x screen.
+    /// It keeps the point size the full image would have, so small images are not scaled up.
+    func previewImage(for item: CaptureItem) async -> NSImage? {
+        let key = "\(item.id.uuidString)-\(item.contentHash)-preview" as NSString
+        if let cached = images.object(forKey: key) { return cached }
+        guard let file = inbox.fileURL(for: item) else { return nil }
+        let preview = inbox.previewURL(for: item.id)
+        let maxPixelSize = Int(Metrics.previewMaxWidth * 2)
+        let decoded = await Task.detached(priority: .userInitiated) {
+            Self.decodeForCard(preview, maxPixelSize: maxPixelSize) ?? Self.decodeForCard(file, maxPixelSize: maxPixelSize)
+        }.value
+        guard let decoded else { return nil }
+        let image = NSImage(cgImage: decoded.image, size: decoded.pointSize)
+        images.setObject(image, forKey: key)
+        return image
+    }
+
+    /// The icon of the app an item was copied from. Looked up once per app.
+    func appIcon(for item: CaptureItem) -> NSImage? {
+        guard let bundleID = item.sourceBundleID else { return nil }
+        if let cached = appIcons[bundleID] { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        appIcons[bundleID] = icon
+        return icon
     }
 
     private func thumbnailKey(_ item: CaptureItem) -> NSString {
         "\(item.id.uuidString)-\(item.contentHash)-thumbnail" as NSString
     }
 
-    private func imageURL(for item: CaptureItem) -> URL? {
-        let preview = inbox.previewURL(for: item.id)
-        return FileManager.default.fileExists(atPath: preview.path) ? preview : inbox.fileURL(for: item)
-    }
-
-    /// Decodes `url` at no more than 400 pixels on its long side: the row shows it at 200 × 40 points.
-    private nonisolated static func downsample(_ url: URL) -> CGImage? {
+    /// Options for a thumbnail no bigger than `maxPixelSize` on its long side, turned upright.
+    private nonisolated static func thumbnailOptions(maxPixelSize: Int) -> CFDictionary {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: 400,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
         ]
+        return options as CFDictionary
+    }
+
+    /// Decodes `url` at no more than `maxPixelSize` pixels on its long side.
+    private nonisolated static func downsample(_ url: URL, maxPixelSize: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize: maxPixelSize))
+    }
+
+    /// Decodes `url` for the preview card: a copy no bigger than `maxPixelSize` on its long side, and the size the
+    /// full image has in points at its dpi (72 when unknown), so the card shows it at its real size.
+    private nonisolated static func decodeForCard(_ url: URL, maxPixelSize: Int) -> (image: CGImage, pointSize: CGSize)? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize: maxPixelSize))
+        else { return nil }
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let dpi = (properties?[kCGImagePropertyDPIWidth] as? NSNumber)?.doubleValue ?? 72
+        let dpiValue = dpi > 0 ? dpi : 72
+        let thumbLong = Double(max(thumb.width, thumb.height))
+        let pixelWidth = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue
+        let pixelHeight = (properties?[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue
+        var fullLong = thumbLong
+        if let pixelWidth, let pixelHeight {
+            fullLong = max(pixelWidth, pixelHeight) * 72 / dpiValue
+        }
+        let factor = fullLong / thumbLong
+        let pointSize = CGSize(width: Double(thumb.width) * factor, height: Double(thumb.height) * factor)
+        return (image: thumb, pointSize: pointSize)
     }
 }

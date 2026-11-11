@@ -18,6 +18,7 @@ final class ClipboardPanelController {
     private var panel: KeyPanel?
     private var previewPanel: NSPanel?
     private var previewTask: Task<Void, Never>?
+    private var previewHost: NSHostingView<ClipboardPreview>?
     private var observingHeight = false
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
@@ -32,19 +33,10 @@ final class ClipboardPanelController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
-    func show() {
-        let interval = HistorySignpost.signposter.beginInterval("PanelShow")
+    /// Builds the panel and its list view ahead of time, so the first open costs the same as the rest.
+    func prepare() {
         let panel = panel ?? makePanel()
         self.panel = panel
-
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        screenFrame = screen?.visibleFrame ?? .zero
-        topLeft = mouse
-
-        model.reset()
-        model.maxListHeight = max(screenFrame.height - Metrics.headerHeight - Metrics.footerHeight - 40, 200)
-        model.onSelectionChange = { [weak self] in self?.schedulePreview() }
 
         // The list view is built once and kept: building it is most of the cost of an open.
         if !(panel.contentView is NSVisualEffectView) {
@@ -58,7 +50,25 @@ final class ClipboardPanelController {
             host.autoresizingMask = [.width, .height]
             container.addSubview(host)
             panel.contentView = container
+            // Sizing the content lays the rows out now, so the first open does not do it.
+            panel.setContentSize(CGSize(width: Metrics.width, height: model.contentHeight))
+            container.layoutSubtreeIfNeeded()
         }
+    }
+
+    func show() {
+        let interval = HistorySignpost.signposter.beginInterval("PanelShow")
+        prepare()
+        guard let panel else { return }
+
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+        screenFrame = screen?.visibleFrame ?? .zero
+        topLeft = mouse
+
+        model.reset()
+        model.maxListHeight = max(screenFrame.height - Metrics.headerHeight - Metrics.footerHeight - 40, 200)
+        model.onSelectionChange = { [weak self] in self?.schedulePreview() }
 
         applyHeight()
         observeHeight()
@@ -118,29 +128,41 @@ final class ClipboardPanelController {
     private func schedulePreview() {
         previewTask?.cancel()
         previewPanel?.orderOut(nil)
+        guard let item = model.selectedItem else { return }
+        let model = self.model
         previewTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(600))
+            let shownAt = ContinuousClock.now + .milliseconds(600)
+            // A short wait first, so holding an arrow key does not decode every image it passes.
+            try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
-            self?.showPreview()
+            // Decode during the rest of the delay: the card is ready when the delay ends.
+            var image: NSImage?
+            if item.fileName != nil { image = await model.previewImage(for: item) }
+            try? await Task.sleep(until: shownAt, clock: .continuous)
+            guard !Task.isCancelled else { return }
+            self?.showPreview(item, image: image)
         }
     }
 
-    private func showPreview() {
-        guard let panel, panel.isVisible, let item = model.selectedItem else { return }
+    private func showPreview(_ item: CaptureItem, image: NSImage?) {
+        guard let panel, panel.isVisible else { return }
         let preview = previewPanel ?? makePreviewPanel()
         previewPanel = preview
 
-        let host = NSHostingView(rootView: ClipboardPreview(
-            item: item,
-            image: item.fileName == nil ? nil : model.image(for: item)
-        ))
+        let view = ClipboardPreview(item: item, image: image, appIcon: model.appIcon(for: item))
+        let host: NSHostingView<ClipboardPreview>
+        if let existing = previewHost {
+            host = existing
+            host.rootView = view
+        } else {
+            // The card is built once: its view is replaced on each show.
+            host = NSHostingView(rootView: view)
+            let container = Self.menuBackground(cornerRadius: 12, material: .popover)
+            container.addSubview(host)
+            preview.contentView = container
+            previewHost = host
+        }
         let size = host.fittingSize
-        let container = Self.menuBackground(cornerRadius: 12, material: .popover)
-        container.frame = CGRect(origin: .zero, size: size)
-        host.frame = container.bounds
-        host.autoresizingMask = [.width, .height]
-        container.addSubview(host)
-        preview.contentView = container
 
         let rowMidY = panel.frame.maxY - (model.selectedRowMidY ?? 60)
         var x = panel.frame.minX - size.width - 8
@@ -148,6 +170,8 @@ final class ClipboardPanelController {
         var y = rowMidY - size.height / 2
         y = min(max(y, screenFrame.minY), screenFrame.maxY - size.height)
         preview.setFrame(CGRect(x: x, y: y, width: size.width, height: size.height), display: true)
+        // The card fills the panel. It is sized here, after the panel, so a smaller card is not left at the old size.
+        host.frame = preview.contentView?.bounds ?? CGRect(origin: .zero, size: size)
         preview.orderFront(nil)
         preview.invalidateShadow()
     }
