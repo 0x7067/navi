@@ -233,7 +233,7 @@ Before is commit `3356977` (the baseline above), after is the change on `aba62bf
 | add | 35.937 | 37.624 | 0.502 | 0.594 |
 | save-flush | - | - | 33.921 | 35.227 |
 
-At 1,000 items `add` goes from 7.9 ms (p95 10.2) to 0.14 ms (p95 0.31), and at 200 items from 1.8 ms to 0.05 ms. The other scenarios are unchanged within noise (the second saved run was noisy on `search-*`). Saved runs: `2026-11-10T23.33.20-aba62bf.json` and `2026-11-10T23.33.30-aba62bf.json`.
+At 1,000 items `add` goes from 7.9 ms (p95 10.2) to 0.14 ms (p95 0.31), and at 200 items from 1.8 ms to 0.05 ms. The other scenarios are unchanged within noise (the second saved run was noisy on `search-*`). From two runs at `aba62bf`, not kept in the repository.
 
 ## Loading
 
@@ -241,7 +241,7 @@ At 1,000 items `add` goes from 7.9 ms (p95 10.2) to 0.14 ms (p95 0.31), and at 2
 
 - Tried and dropped: `Data(contentsOf:options: .mappedIfSafe)` (no gain, 17.1 ms) and `JSONSerialization` with hand-built items (38 ms, slower than `JSONDecoder`).
 - Kept: files of 512 KB and up are split at `},{"`, which only ever sits between two items because quotes inside strings are escaped. Each piece decodes on its own core. A file that is not in `JSONEncoder`'s compact form, or a piece that fails, falls back to one plain decode.
-- Runs: `2026-11-10T23.34.31-aba62bf.json` and `2026-11-10T23.34.38-aba62bf.json`. Other scenarios did not change.
+- From two runs at `aba62bf`, not kept in the repository. Other scenarios did not change.
 
 | Size | Load median before (ms) | p95 before (ms) | Load median after (ms) | p95 after (ms) |
 |---|---:|---:|---:|---:|
@@ -271,7 +271,7 @@ What the new search no longer matches that the old one did, from a one-off check
 | `search-cold` | A fresh `Inbox` from disk, then the first search at once. Only main-actor work is timed; the background build runs beside it |
 | `search-warmup` | From the end of `Inbox.init` until the background build has installed every key |
 
-Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe147`; current numbers are under Current numbers. Before is the original filter (ASCII baseline above, run 2). After is `2026-11-11T02.02.03-6ebe147.json` (default corpus, second run), `2026-11-11T02.02.14-6ebe147.json` (`--corpus pt`) and `2026-11-11T02.02.48-6ebe147.json` (`--corpus mixed`). The previous version of this change had `search-pt-rare` at about 47 ms, `search-pt-none` at 49, `search-pt-accent` at 25 and `search-pt-accent2` at 36 on a similar Portuguese history; those were review measurements, not saved.
+Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe147`; current numbers are under Current numbers. Before is the original filter (ASCII baseline above, run 2). After is three runs at `6ebe147` (default corpus, `--corpus pt` and `--corpus mixed`), not kept in the repository. The previous version of this change had `search-pt-rare` at about 47 ms, `search-pt-none` at 49, `search-pt-accent` at 25 and `search-pt-accent2` at 36 on a similar Portuguese history; those were review measurements, not saved.
 
 | Scenario | Before median | Before p95 | After median | After p95 | Deferred |
 |---|---:|---:|---:|---:|---:|
