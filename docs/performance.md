@@ -43,7 +43,7 @@ Each size gets a fresh temporary directory, deleted at the end. The bench writes
 | `search-rare` | `Inbox.search("quartz")`, which matches about 7% of text items |
 | `search-none` | `Inbox.search("zzqxv")`, which matches nothing |
 | `search-accent-on-ascii` | `Inbox.search("ação")` on the ASCII corpus |
-| `search-cold`, `search-warmup` | The first search on a fresh inbox, and the background key build; see Search below |
+| `search-cold`, `search-warmup` | The first search on a fresh inbox, and the background key build; see How it works |
 | `search-cold-huge` | The first search (`привет`) on a fresh inbox that also holds a 2 MB text with no key yet. That text must be left out and counted as deferred, not folded |
 | `search-mixed-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji`, `-accent`, `-none` | With `--corpus mixed`: a word in each script, `😀`, `acao` (finds `ação`), and `zzqxv` |
 | `search-mixed-cold-cyrillic`, `-japanese`, `-arabic`, `-hindi`, `-emoji` | With `--corpus mixed`: the first search on a fresh inbox. The `deferred` column is how many items it left out |
@@ -80,55 +80,23 @@ Open the `.trace` file in Instruments. In the `os_signpost` track, filter by sub
 
 ## Current numbers
 
-Goal: every main-thread scenario has a p95 under 16.6 ms (one 60 Hz frame) at 200, 1,000 and 5,000 items, on both corpora. **Met:** every main-thread scenario is under the goal at every size and corpus. The worst main-thread p95 is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items).
+Goal: every main-thread scenario has a p95 under 16.6 ms (one 60 Hz frame) at 200, 1,000 and 5,000 items. **Met** on both corpora.
 
-Background rows (`save-flush`, `search-warmup`) run off the main thread. They show total cost only and are not held to the goal.
+5,000 items, median / p95 in ms, at commit `2697239` on Apple M4 Pro, macOS 27.2, release build, seed 42. The runs are not saved; reproduce them with `swift run -c release history-bench` and `--corpus mixed`. Before is the baseline below.
 
-Recorded at commit `07feca8` on Apple M4 Pro, macOS 27.2, release build, seed 42, default iterations. Runs: `2026-11-11T02.30.10-07feca8.json` (ascii) and `2026-11-11T02.32.12-07feca8.json` (mixed). All times in ms.
+| Scenario | Before (ascii) | ascii | mixed |
+|---|---:|---:|---:|
+| `load` | 16.4 / 16.7 | 5.2 / 5.9 | 8.0 / 10.1 |
+| `add` | 35.9 / 37.6 | 0.5 / 0.6 | 0.6 / 0.7 |
+| `add-large-mixed` | | 1.2 / 1.6 | 1.3 / 1.5 |
+| `search-common` | 8.7 / 9.1 | 1.4 / 2.0 | |
+| `search-rare` | 33.3 / 33.6 | 3.7 / 3.8 | |
+| Slowest warm search | 34.3 / 34.6 | 6.5 / 7.0 | 9.4 / 9.6 |
+| First search after launch (`search-cold`) | | 6.1 / 6.2 | 6.2 / 6.3 |
+| `results` | 8.4 / 8.8 | 1.5 / 1.9 | 8.4 / 8.6 |
+| `save-flush` (background) | | 32.3 / 38.8 | 55.1 / 61.0 |
+| `search-warmup` (background) | | 10.5 / 11.1 | 185 / 187 |
 
-### ascii corpus (`2026-11-11T02.30.10-07feca8.json`)
-
-| Scenario | 200 med | 200 p95 | 1,000 med | 1,000 p95 | 5,000 med | 5,000 p95 |
-|---|---:|---:|---:|---:|---:|---:|
-| `load` | 0.653 | 0.688 | 1.199 | 1.790 | 5.637 | 6.062 |
-| `add` | 0.072 | 0.094 | 0.244 | 0.308 | 1.343 | 1.551 |
-| `save-flush` (background, not main thread) | 1.558 | 1.674 | 6.626 | 6.713 | 32.224 | 34.908 |
-| `add-large-mixed` | 0.959 | 1.308 | 1.030 | 2.431 | 2.107 | 2.266 |
-| `search-common` | 0.052 | 0.055 | 0.302 | 0.304 | 1.529 | 1.594 |
-| `search-rare` | 0.176 | 0.182 | 0.836 | 0.839 | 4.112 | 4.354 |
-| `search-none` | 0.183 | 0.184 | 0.878 | 0.880 | 4.408 | 5.269 |
-| `search-accent-on-ascii` | 0.297 | 0.300 | 1.439 | 1.442 | 6.852 | 7.317 |
-| `search-cold` | 0.123 | 0.125 | 0.659 | 0.687 | 4.272 | 4.706 |
-| `search-cold-huge` | 0.258 | 0.278 | 1.260 | 1.339 | 6.014 | 6.021 |
-| `search-warmup` (background, not main thread) | 0.115 | 0.124 | 0.621 | 0.682 | 5.072 | 5.362 |
-| `results` | 0.052 | 0.055 | 0.279 | 0.296 | 1.468 | 1.506 |
-| `thumbnail-open` | 0.121 | 0.131 | 0.133 | 0.145 | 0.124 | 0.137 |
-| `thumbnail-draw` | 1.489 | 1.648 | 8.384 | 8.703 | 1.508 | 1.539 |
-
-### mixed corpus (`2026-11-11T02.32.12-07feca8.json`)
-
-| Scenario | 200 med | 200 p95 | 1,000 med | 1,000 p95 | 5,000 med | 5,000 p95 |
-|---|---:|---:|---:|---:|---:|---:|
-| `load` | 0.480 | 0.622 | 2.163 | 2.490 | 8.312 | 9.655 |
-| `add` | 0.069 | 0.081 | 0.265 | 0.294 | 1.550 | 1.632 |
-| `save-flush` (background, not main thread) | 2.476 | 2.672 | 12.495 | 13.282 | 60.077 | 64.889 |
-| `add-large-mixed` | 0.923 | 1.865 | 1.025 | 1.123 | 2.400 | 2.777 |
-| `search-mixed-cyrillic` | 0.375 | 0.402 | 1.789 | 1.804 | 9.318 | 9.368 |
-| `search-mixed-japanese` | 0.339 | 0.570 | 1.711 | 1.859 | 9.102 | 9.465 |
-| `search-mixed-arabic` | 0.351 | 0.383 | 1.812 | 1.824 | 9.274 | 9.422 |
-| `search-mixed-hindi` | 0.308 | 0.344 | 1.542 | 1.553 | 7.698 | 7.978 |
-| `search-mixed-emoji` | 0.328 | 0.347 | 1.568 | 1.586 | 8.237 | 8.598 |
-| `search-mixed-none` | 0.403 | 0.406 | 2.044 | 2.061 | 10.462 | 10.544 |
-| `search-mixed-cold-cyrillic` | 6.343 | 6.902 | 6.098 | 6.380 | 6.326 | 6.886 |
-| `search-mixed-cold-japanese` | 6.389 | 6.856 | 6.133 | 6.771 | 6.295 | 6.586 |
-| `search-mixed-cold-arabic` | 6.348 | 6.831 | 6.098 | 6.256 | 6.299 | 6.972 |
-| `search-mixed-cold-hindi` | 6.453 | 6.847 | 6.084 | 6.179 | 6.249 | 6.536 |
-| `search-mixed-cold-emoji` | 6.406 | 6.922 | 6.100 | 6.554 | 6.291 | 7.110 |
-| `search-cold-huge` | 6.461 | 6.769 | 6.136 | 6.285 | 6.229 | 6.561 |
-| `search-warmup` (background, not main thread) | 7.964 | 8.255 | 45.529 | 46.101 | 228.709 | 233.587 |
-| `results` | 0.337 | 0.347 | 1.793 | 1.820 | 9.378 | 9.465 |
-| `thumbnail-open` | 0.129 | 0.149 | 0.125 | 0.135 | 0.122 | 0.130 |
-| `thumbnail-draw` | 8.557 | 9.351 | 1.532 | 1.560 | 1.512 | 1.522 |
 
 ## Baseline
 
@@ -190,78 +158,10 @@ Spread is run 2 against run 1, on the median. The target is within 15% for every
 
 No scenario has a median under 0.1 ms, so none is below timer resolution.
 
-## Saving
+## How it works
 
-`Inbox` used to encode all items and rewrite `history.json` on the main actor for every change. It now hands a snapshot to `HistoryWriter`, which encodes and writes on one serial background queue. A pending snapshot is replaced by a newer one, so bursts coalesce and the latest state wins. `Inbox.flush()` blocks until the last snapshot is written; the app calls it in `applicationWillTerminate`. `add` also inserts at its sorted position instead of sorting everything.
-
-Before is commit `3356977` (the baseline above), after is the change on `aba62bf`. The `add` scenario now measures the main-actor cost only; `save-flush` is the full cost and is about the old `add`.
-
-| 5,000 items | Before median (ms) | Before p95 (ms) | After median (ms) | After p95 (ms) |
-|---|---:|---:|---:|---:|
-| add | 35.937 | 37.624 | 0.502 | 0.594 |
-| save-flush | - | - | 33.921 | 35.227 |
-
-At 1,000 items `add` goes from 7.9 ms (p95 10.2) to 0.14 ms (p95 0.31), and at 200 items from 1.8 ms to 0.05 ms. The other scenarios are unchanged within noise (the second saved run was noisy on `search-*`). From two runs at `aba62bf`, not kept in the repository.
-
-## Loading
-
-`Inbox(directory:)` read and decoded `history.json` on the calling thread, 16.4 ms at 5,000 items. The file is now cut at item boundaries and the pieces decode in parallel. The format on disk is unchanged, so existing files load as before.
-
-- Tried and dropped: `Data(contentsOf:options: .mappedIfSafe)` (no gain, 17.1 ms) and `JSONSerialization` with hand-built items (38 ms, slower than `JSONDecoder`).
-- Kept: files of 512 KB and up are split at `},{"`, which only ever sits between two items because quotes inside strings are escaped. Each piece decodes on its own core. A file that is not in `JSONEncoder`'s compact form, or a piece that fails, falls back to one plain decode.
-- From two runs at `aba62bf`, not kept in the repository. Other scenarios did not change.
-
-| Size | Load median before (ms) | p95 before (ms) | Load median after (ms) | p95 after (ms) |
-|---|---:|---:|---:|---:|
-| 200 | 0.647 | 0.660 | 0.665 | 0.690 |
-| 1,000 | 3.172 | 3.216 | 1.127 | 1.177 |
-| 5,000 | 16.365 | 16.676 | 5.345 | 5.519 |
-
-Before is an unsaved run on the same machine just before the change. The second saved run measured 6.0 ms median and 6.2 ms p95 at 5,000.
-
-## Search
-
-Search ignores case, accents and character width, the same in every locale, and one rule covers every query: `acao` finds `ação`, `CAFE` finds `café`, `strasse` finds `Straße`, fullwidth `ＡＢＣ` finds `abc`. It matches the text and the source app name, in display order. This replaces the earlier `localizedCaseInsensitiveContains` filter, which kept accents and treated some queries differently (digits, accents in mixed normalization forms), and which scanned every item on every call.
-
-How it works (`SearchCache`, `SearchFold`):
-
-- Each item has a key for its text and for its source app: the bytes of `string.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)`. A search folds the query the same way and looks for the bytes with `memmem`.
-- The key is built without calling the system fold for every text. ASCII is lowercased eight bytes at a time. Characters from U+0080 to U+02FF come from a table. Others come from a cache filled by the system fold, one character (with the marks after it) at a time. A text with a character whose fold depends on its neighbors (CJK compatibility ideographs, emoji skin tones, some spaces and marks above U+036F) has the system fold applied only to the stretch around it, between two ASCII-adjacent spaces. Every item gets a key; nothing falls back to a scan.
-- The fold equals the system fold byte for byte. `InboxSearchTests` checks it on 20,000 random texts and every BMP scalar. A one-off check of about 21 million random texts and 10 million scalar cases found no difference.
-- Keys for a new item up to 16 KB are built when it is added (under 1 ms even for non-Latin text). A bigger text is handed to the background builder. A search never builds such a key itself: until it lands, the search leaves that item out and counts it in `Inbox.deferredSearchItems`. After `Inbox.init`, a background task builds the keys of the loaded items, 500 at a time, and installs each batch on the main actor.
-- Until the keys exist, a search builds missing ones up to 16 KB itself, but only for `Inbox.searchBudget` (6 ms, on a monotonic clock). Items still without a key when that runs out are left out of that search and counted in `Inbox.deferredSearchItems`; they are never dropped for good. Each installed batch changes `Inbox.searchKeysVersion`, which `search` reads, so `ClipboardModel.results` and the list that shows it recompute by themselves and the results fill in. In practice that is a few milliseconds for Latin text and about 0.2 s for 5,000 Arabic, Hindi or Japanese items, only for the first search after launch.
-- The system-fold caches are bounded: the scalar cache clears at 16,384 entries, the cluster cache at 2,048, and clusters over 64 bytes are not cached, so stacks of combining marks cannot grow them.
-
-What the new search no longer matches that the old one did, from a one-off check of 1.5 million random query and text pairs in en_US, pt_BR and de_DE (0.06% of pairs with realistic characters, 0.5% with the exotic ones): compatibility forms of digits (`1` finding `¹` or `①`, `２` finding `²`), `ß` finding a single `s`, composed Hangul or kana (`가` finding `ᄀ`+`ᅡ`, `ガ` finding `カ` + voicing mark) when the other form has the pieces, and queries that are only combining marks, zero-width characters or Devanagari/Arabic marks. Plain English and accented text lost nothing. It matches more: for example `Reuniao` finds `Reunião`, and accents are ignored when the query has a digit.
-
-| Scenario | What it times |
-|---|---|
-| `search-cold` | A fresh `Inbox` from disk, then the first search at once. Only main-actor work is timed; the background build runs beside it |
-| `search-warmup` | From the end of `Inbox.init` until the background build has installed every key |
-
-Median and p95 in ms at 5,000 items, from the search change's own runs at `6ebe147`; current numbers are under Current numbers. Before is the original filter (ASCII baseline above, run 2). After is two runs at `6ebe147` (default corpus and `--corpus mixed`), not kept in the repository.
-
-| Scenario | Before median | Before p95 | After median | After p95 | Deferred |
-|---|---:|---:|---:|---:|---:|
-| search-common | 8.683 | 9.067 | 1.426 | 1.443 | |
-| search-rare | 33.277 | 33.600 | 3.729 | 3.751 | |
-| search-none | 34.271 | 34.624 | 3.885 | 3.947 | |
-| search-accent-on-ascii | | | 6.404 | 6.437 | |
-| results | 8.427 | 8.809 | 1.457 | 1.556 | |
-| search-cold | n/a | n/a | 3.983 | 4.354 | 0 |
-| search-warmup (background) | n/a | n/a | 4.683 | 4.894 | |
-| search-mixed-cyrillic | | | 6.178 | 6.241 | |
-| search-mixed-none | | | 7.646 | 7.681 | |
-| results, mixed corpus | | | 9.676 | 9.994 | |
-| search-mixed-cold-cyrillic | | | 6.250 | 6.316 | 4906 |
-| search-mixed-cold-japanese | | | 6.247 | 6.475 | 4914 |
-| search-mixed-cold-arabic | | | 6.255 | 6.450 | 4916 |
-| search-mixed-cold-hindi | | | 6.251 | 6.612 | 4916 |
-| search-mixed-cold-emoji | | | 6.232 | 6.481 | 4924 |
-| search-warmup, mixed (background) | | | 223.717 | 225.496 | |
-
-Every search scenario, cold included, is under 16.6 ms at p95 at 200, 1,000 and 5,000 items on both corpora; the worst is 10.5 ms (`search-mixed-none`, mixed corpus, 5,000 items, a warm `memmem` over 22 MB of keys) on `07feca8`, see Current numbers. The cold searches stay near the 6 ms budget whatever the script. The warm-up rows run on a background thread, not the main actor. `load`, `add` and the thumbnail scenarios do not touch this code and are within noise of the baseline.
-
-### Bench isolation for `load` and the cold searches
-
-Each timed `load` and each cold search used to start while the previous run's `Inbox` was still building search keys in the background and was freed inside the timer. On the mixed corpus that made `load` read 23.5 ms median (41 ms p95) at 5,000 items, and `search-mixed-cold-arabic` spike to 18 ms p95 at 200 items. The decode itself is about 9 ms there (read 1.4 ms, decode 8 to 11 ms, sort 0.4 ms), already split into byte-balanced pieces over the core count. The bench now waits for the previous inbox's build to finish and frees it before each run, outside the timer. Mixed `load` is 8.3 ms median and 9.7 ms worst p95 over all sizes on `07feca8`; every cold search is 7 ms or less at p95 at every size and corpus.
+- **Saving** (`HistoryWriter`): `Inbox` hands each snapshot to a serial background queue. A newer snapshot replaces one that has not started writing. Files of removed items are deleted after the snapshot that drops them is written. `Inbox.flush()` waits for the queue; the app calls it on quit.
+- **Loading** (`CaptureItem.decodeHistory`): a `history.json` over 512 KB is cut at item boundaries and the pieces decode in parallel. If a piece fails, the whole file decodes on one thread. The format on disk is unchanged.
+- **Search** (`SearchCache`): each item has a key, the bytes of its text and source app after `String.folding` with case, accents and width ignored (`acao` finds `ação`). A search folds the query the same way and looks for it with `memmem`.
+  - A new item up to 16 KB gets its key when added; a bigger one in the background. After launch a background task builds the keys of the loaded items, 500 at a time.
+  - Until the keys exist, a search builds missing ones up to 16 KB itself for at most `Inbox.searchBudget` (6 ms). Items still without a key are left out of that search and counted in `Inbox.deferredSearchItems`. Each installed batch changes `Inbox.searchKeysVersion`, so the list refreshes by itself as keys land.
