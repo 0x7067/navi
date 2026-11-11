@@ -143,3 +143,19 @@ Before is commit `3356977` (the baseline above), after is the change on `aba62bf
 | save-flush | - | - | 33.921 | 35.227 |
 
 At 1,000 items `add` goes from 7.9 ms (p95 10.2) to 0.14 ms (p95 0.31), and at 200 items from 1.8 ms to 0.05 ms. The other scenarios are unchanged within noise (the second saved run was noisy on `search-*`). Saved runs: `2026-11-10T23.33.20-aba62bf.json` and `2026-11-10T23.33.30-aba62bf.json`.
+
+## Loading
+
+`Inbox(directory:)` read and decoded `history.json` on the calling thread, 16.4 ms at 5,000 items. The file is now cut at item boundaries and the pieces decode in parallel. The format on disk is unchanged, so existing files load as before.
+
+- Tried and dropped: `Data(contentsOf:options: .mappedIfSafe)` (no gain, 17.1 ms) and `JSONSerialization` with hand-built items (38 ms, slower than `JSONDecoder`).
+- Kept: files of 512 KB and up are split at `},{"`, which only ever sits between two items because quotes inside strings are escaped. Each piece decodes on its own core. A file that is not in `JSONEncoder`'s compact form, or a piece that fails, falls back to one plain decode.
+- Runs: `2026-11-10T23.34.31-aba62bf.json` and `2026-11-10T23.34.38-aba62bf.json`. Other scenarios did not change.
+
+| Size | Load median before (ms) | p95 before (ms) | Load median after (ms) | p95 after (ms) |
+|---|---:|---:|---:|---:|
+| 200 | 0.647 | 0.660 | 0.665 | 0.690 |
+| 1,000 | 3.172 | 3.216 | 1.127 | 1.177 |
+| 5,000 | 16.365 | 16.676 | 5.345 | 5.519 |
+
+Before is an unsaved run on the same machine just before the change. The second saved run measured 6.0 ms median and 6.2 ms p95 at 5,000.

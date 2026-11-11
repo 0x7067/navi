@@ -232,7 +232,7 @@ public final class Inbox {
     private func load() {
         guard let data = try? Data(contentsOf: historyURL) else { return }
         do {
-            items = try JSONDecoder().decode([CaptureItem].self, from: data)
+            items = try CaptureItem.decodeHistory(from: data)
             sort()
         } catch {
             logger.error("Could not read history: \(error.localizedDescription)")
