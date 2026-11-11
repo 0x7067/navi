@@ -11,15 +11,12 @@ struct SearchCache {
         let sourceApp: [UInt8]
     }
 
-    /// Keys by item id. Read-only outside this type; tests check that evicted items lose their keys.
+    /// Keys by item id. Read-only outside this type.
     private(set) var keys: [UUID: Key] = [:]
 
-    /// Drops keys of items that are no longer in the history. Runs on every change to the list, so it returns
-    /// early only when there is nothing to drop.
-    mutating func prune(keeping items: [CaptureItem]) {
-        guard !keys.isEmpty else { return }
-        let live = Set(items.map(\.id))
-        keys = keys.filter { live.contains($0.key) }
+    /// Drops the key of an item that left the history.
+    mutating func remove(_ id: UUID) {
+        keys[id] = nil
     }
 
     /// Builds the key for `item` unless it has one.

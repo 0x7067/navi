@@ -290,22 +290,20 @@ struct InboxSearchTests {
         #expect(reloaded.deferredSearchItems == 0)
     }
 
-    @Test func pruneDropsKeysOfEvictedItemsEvenWhenCountsMatch() {
-        func item(_ text: String) -> CaptureItem {
-            CaptureItem(
-                id: UUID(), kind: .text, createdAt: start, lastUsedAt: start, copyCount: 1, pinned: false,
-                text: text, fileName: nil, sourceApp: nil, sourceBundleID: nil, contentHash: text
-            )
-        }
-        let evicted = item("alpha")
-        let kept = item("beta")
-        let added = item("gamma")
-        var cache = SearchCache()
-        cache.prepare(evicted)
-        cache.prepare(kept)
-        // Two keys and two items: the old count check skipped this prune and kept the evicted item's key.
-        cache.prune(keeping: [kept, added])
-        #expect(Set(cache.keys.keys) == [kept.id])
+    @Test func removedAndEvictedItemsLoseTheirSearchKeys() {
+        let inbox = Inbox(directory: directory, limit: 2)
+        inbox.add(text: "alpha", now: start)
+        inbox.add(text: "beta", now: start + 1)
+        #expect(inbox.searchKeyCount == 2)
+        // The limit evicts "alpha". Two keys and two items before and after, so a count check would miss a stale key.
+        inbox.add(text: "gamma", now: start + 2)
+        #expect(inbox.items.map(\.text) == ["gamma", "beta"])
+        #expect(inbox.searchKeyCount == 2)
+        #expect(inbox.search("alpha").isEmpty)
+        inbox.remove(inbox.items[0].id)
+        #expect(inbox.searchKeyCount == 1)
+        inbox.clearUnpinned()
+        #expect(inbox.searchKeyCount == 0)
     }
 
 }

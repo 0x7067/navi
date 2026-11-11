@@ -10,9 +10,7 @@ import os
 @MainActor
 @Observable
 public final class Inbox {
-    public private(set) var items: [CaptureItem] = [] {
-        didSet { searchCache.prune(keeping: items) }
-    }
+    public private(set) var items: [CaptureItem] = []
     public let directory: URL
     public var limit: Int
 
@@ -30,7 +28,6 @@ public final class Inbox {
     /// background build is done.
     @ObservationIgnored public private(set) var deferredSearchItems = 0
     @ObservationIgnored private let logger = Logger(subsystem: "com.donovanhiland.navi", category: "Inbox")
-    private static let signposter = OSSignposter(subsystem: "com.donovanhiland.navi", category: "History")
 
     /// `~/Library/Application Support/Navi`. The test app, Navi Dev, keeps its own history in "Navi Dev".
     public static var defaultDirectory: URL {
@@ -136,13 +133,13 @@ public final class Inbox {
 
     public func remove(_ id: UUID) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        deleteFile(of: items[index])
+        discard(items[index])
         items.remove(at: index)
         save()
     }
 
     public func clearUnpinned() {
-        for item in items where !item.pinned { deleteFile(of: item) }
+        for item in items where !item.pinned { discard(item) }
         items.removeAll { !$0.pinned }
         save()
     }
@@ -161,7 +158,8 @@ public final class Inbox {
         return found.items
     }
 
-    /// True once every item's search key is built. Searches work before that, only a little slower.
+    /// True once every item's search key is built. Until then a search can leave out items whose keys are
+    /// missing (see `deferredSearchItems`); they appear once the background build installs them.
     public var isSearchReady: Bool { searchCache.covers(items) }
 
     /// The item's file content, or nil when the item has no file or it cannot be read.
@@ -202,7 +200,7 @@ public final class Inbox {
         // A new item is unpinned and normally newest, so an ordered insert replaces the full sort.
         let index = items.firstIndex { !$0.pinned && $0.lastUsedAt < item.lastUsedAt } ?? items.count
         items.insert(item, at: index)
-        // A big text is folded in the background; a search before then builds it within its own budget.
+        // A big text is folded in the background; a search before then leaves it out and counts it as deferred.
         if (item.text?.utf8.count ?? 0) <= Self.inlineKeyLimit {
             searchCache.prepare(item)
         } else {
@@ -233,7 +231,7 @@ public final class Inbox {
             if unpinnedCount <= limit {
                 kept.append(item)
             } else {
-                deleteFile(of: item)
+                discard(item)
             }
         }
         items = kept
@@ -247,7 +245,9 @@ public final class Inbox {
         }
     }
 
-    private func deleteFile(of item: CaptureItem) {
+    /// Every item that leaves the history goes through here: its search key goes now, its files after the next save.
+    private func discard(_ item: CaptureItem) {
+        searchCache.remove(item.id)
         doomedFiles.append(markupURL(for: item.id))
         doomedFiles.append(previewURL(for: item.id))
         if let url = fileURL(for: item) { doomedFiles.append(url) }
@@ -275,6 +275,9 @@ public final class Inbox {
             }
         }
     }
+
+    /// How many items have a search key. Tests check that items that left the history lost theirs.
+    var searchKeyCount: Int { searchCache.keys.count }
 
     private func installSearchKeys(_ built: [UUID: SearchCache.Key]) {
         searchCache.install(built, for: items)
