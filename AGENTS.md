@@ -218,10 +218,15 @@ Xnapper's backgrounds, and macshot's auto-redact.
 | `docs/capture-plan.html` | Prototype, feature map, and plan |
 | `docs/upstream-hex.md` | Hex as the upstream for talk to type: feature map, sync steps |
 | `Packages/NaviDictation/Bench` | Dictation benchmark cases and saved results |
+| `docs/performance.md` | History performance: what `history-bench` times, how search and saves work, numbers |
+| `Packages/NaviClipboard/Bench` | Saved `history-bench` results |
 
 `Inbox` keeps items in `~/Library/Application Support/Navi/` (`history.json`
 plus `files/`). Items sort by pinned, then by `lastUsedAt`. The newest 200
-unpinned items stay. New fields on `CaptureItem` must decode from old history
+unpinned items stay. Saves run on a background queue (`HistoryWriter`); call
+`Inbox.flush()` before the process exits (`applicationWillTerminate` does).
+Search ignores case, accents and character width (`SearchCache`, `SearchFold`).
+New fields on `CaptureItem` must decode from old history
 files (use `decodeIfPresent` in `init(from:)`).
 
 ## Commands
@@ -236,6 +241,7 @@ NAVI_SNAPSHOTS=/tmp/navi-snaps swift test --filter EditorSnapshot  # in NaviCapt
 cd Packages/NaviRecording && swift test # recording math, GIF, audio mixdown
 cd Packages/NaviDictation && swift test # cleanup rules, fn gestures, fn setting, scoring
 cd Packages/NaviDictation && swift run dictation-bench [--audio [--speech apple,parakeet]] [--failures] [--save]
+cd Packages/NaviClipboard && swift run -c release history-bench [--sizes 200,1000,5000] [--corpus ascii|pt|mixed] [--save]  # History list benchmark
 scripts/dev.sh          # build and run Navi Dev in place of Navi (fresh: wipe it first; stop: back to Navi)
 ```
 
