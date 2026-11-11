@@ -168,6 +168,7 @@ struct InboxSearchTests {
         let inbox = Inbox(directory: directory)
         inbox.add(text: "Reunião de projeto", now: start)
         inbox.add(text: "plain text", now: start + 1)
+        inbox.flush()
         let reloaded = Inbox(directory: directory)
         let before = reloaded.search("reuniao").map(\.id)
         while !reloaded.isSearchReady { try await Task.sleep(for: .milliseconds(5)) }
@@ -183,6 +184,7 @@ struct InboxSearchTests {
         let expected = inbox.search("reuniao").map(\.id)
         #expect(expected.count == 40)
 
+        inbox.flush()
         let reloaded = Inbox(directory: directory)
         reloaded.searchBudget = .zero
         let versionBefore = reloaded.searchKeysVersion
@@ -213,6 +215,7 @@ struct InboxSearchTests {
         let inbox = Inbox(directory: directory)
         inbox.add(text: "um dois", now: start)
         inbox.add(text: "um três", now: start + 1)
+        inbox.flush()
         let reloaded = Inbox(directory: directory)
         reloaded.searchBudget = .seconds(10)
         #expect(reloaded.search("um").count == 2)
