@@ -53,13 +53,30 @@ final class ClipboardWatcher {
         let app = NSWorkspace.shared.frontmostApplication
         let sourceApp = app?.localizedName
         let bundleID = app?.bundleIdentifier
-        if let text = pasteboard.string(forType: .string) {
-            inbox.add(text: text, sourceApp: sourceApp, sourceBundleID: bundleID)
+        let snapshot = ClipboardSnapshot.read(pasteboard)
+        let files = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        let text = pasteboard.string(forType: .string)
+        let hasImage = !types.isDisjoint(with: [.png, .tiff])
+        let hasRichText = !types.isDisjoint(with: [.rtf, .rtfd, .html])
+        let item: CaptureItem?
+        if !files.isEmpty {
+            item = inbox.add(text: files.map(\.path).joined(separator: "\n"), kind: .file, sourceApp: sourceApp, sourceBundleID: bundleID)
+        } else if let text, !hasImage || hasRichText {
+            item = inbox.add(text: text, sourceApp: sourceApp, sourceBundleID: bundleID)
         } else if let png = pasteboard.data(forType: .png) {
-            inbox.add(fileData: png, fileExtension: "png", kind: .image, sourceApp: sourceApp, sourceBundleID: bundleID)
+            item = inbox.add(fileData: png, fileExtension: "png", kind: .image, sourceApp: sourceApp, sourceBundleID: bundleID)
         } else if let tiff = pasteboard.data(forType: .tiff) {
-            addEncoding(tiff, sourceApp: sourceApp, sourceBundleID: bundleID)
+            addEncoding(tiff, snapshot: snapshot, sourceApp: sourceApp, sourceBundleID: bundleID)
+            return
+        } else {
+            return
         }
+        saveSnapshot(snapshot, for: item)
+    }
+
+    private func saveSnapshot(_ snapshot: [[String: Data]]?, for item: CaptureItem?) {
+        guard let snapshot, let item else { return }
+        ClipboardSnapshot.save(snapshot, to: inbox.pasteboardURL(for: item.id))
     }
 
     func waitForIdle() async {
@@ -68,14 +85,14 @@ final class ClipboardWatcher {
         }
     }
 
-    private func addEncoding(_ tiff: Data, sourceApp: String?, sourceBundleID: String?) {
+    private func addEncoding(_ tiff: Data, snapshot: [[String: Data]]?, sourceApp: String?, sourceBundleID: String?) {
         let id = UUID()
         let encoding = Task.detached(priority: .userInitiated) { Self.pngData(fromTIFF: tiff) }
         let finish = Task { @MainActor [weak self] in
             let png = await encoding.value
             guard let self else { return }
             if let png {
-                inbox.add(fileData: png, fileExtension: "png", kind: .image, sourceApp: sourceApp, sourceBundleID: sourceBundleID)
+                saveSnapshot(snapshot, for: inbox.add(fileData: png, fileExtension: "png", kind: .image, sourceApp: sourceApp, sourceBundleID: sourceBundleID))
             }
             encodings[id] = nil
         }

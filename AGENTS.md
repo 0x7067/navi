@@ -289,6 +289,11 @@ video editor.
   A click anywhere on a row flips it. Esc, ⌘W, or a click away closes it.
 - `⌥⇧⌘N` opens the Navi menu at the mouse. The same menu shows from the
   menu bar icon. It is an AppKit `NSStatusItem` menu, built in `NaviMenu`.
+- Clipboard history keeps every type of each copy in `<id>.pasteboard` (binary
+  plist, up to 32 MB) and pastes them all back, exactly as copied. The list
+  item is a file item when the copy has file URLs (Finder), an image when it has
+  an image and only plain text, and text otherwise. Markup Done deletes the
+  saved copy, so the new image pastes.
 - Navi marks its own pasteboard writes with `NaviPasteboard.ownType`, so the
   clipboard watcher does not add a capture twice.
 

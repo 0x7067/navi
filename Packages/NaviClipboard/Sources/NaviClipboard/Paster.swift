@@ -21,7 +21,11 @@ enum Paster {
 
     static func write(_ item: CaptureItem, inbox: Inbox, to pasteboard: NSPasteboard) -> Int {
         pasteboard.clearContents()
-        if item.kind == .recording, let url = inbox.fileURL(for: item) {
+        if let saved = ClipboardSnapshot.load(inbox.pasteboardURL(for: item.id)) {
+            ClipboardSnapshot.write(saved, to: pasteboard)
+        } else if item.kind == .file, let text = item.text {
+            pasteboard.writeObjects(text.split(separator: "\n").map { URL(filePath: String($0)) as NSURL })
+        } else if item.kind == .recording, let url = inbox.fileURL(for: item) {
             pasteboard.writeObjects([url as NSURL])
         } else if let url = inbox.fileURL(for: item), url.pathExtension.lowercased() == "png",
                   let png = try? Data(contentsOf: url) {

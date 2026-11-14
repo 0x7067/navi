@@ -163,6 +163,7 @@ public final class Inbox {
         items[index].contentHash = Self.hash(data)
         try? FileManager.default.removeItem(at: rowThumbnailURL(for: id))
         try? FileManager.default.removeItem(at: cardImageURL(for: id))
+        try? FileManager.default.removeItem(at: pasteboardURL(for: id))
         imageCachesChecked.remove(id)
         save()
         ensureImageCaches(for: items[index])
@@ -236,6 +237,10 @@ public final class Inbox {
 
     public func previewURL(for id: UUID) -> URL {
         filesDirectory.appending(path: "\(id.uuidString).preview.png")
+    }
+
+    public func pasteboardURL(for id: UUID) -> URL {
+        filesDirectory.appending(path: "\(id.uuidString).pasteboard")
     }
 
     public func markupURL(for id: UUID) -> URL {
@@ -378,6 +383,7 @@ public final class Inbox {
         pendingHashes.remove(item.id)
         doomedFiles.append(markupURL(for: item.id))
         doomedFiles.append(previewURL(for: item.id))
+        doomedFiles.append(pasteboardURL(for: item.id))
         doomedFiles.append(rowThumbnailURL(for: item.id))
         doomedFiles.append(cardImageURL(for: item.id))
         imageCachesChecked.remove(item.id)

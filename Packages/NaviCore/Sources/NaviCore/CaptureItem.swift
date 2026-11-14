@@ -6,6 +6,7 @@ public enum CaptureKind: String, Codable, Sendable, CaseIterable {
     case screenshot
     case recording
     case dictation
+    case file
 
     public var isImage: Bool { self == .image || self == .screenshot }
 }
